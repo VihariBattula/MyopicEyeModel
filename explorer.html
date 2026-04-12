@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Journey Inside the Eye — Immersive Anatomical Explorer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #030712; --bg-panel: rgba(0,0,0,0.55); --text: #f8fafc; --text-sub: #94a3b8;
+            --accent: #38bdf8; --accent2: #818cf8; --accent3: #c084fc;
+            --border: rgba(255,255,255,0.08); --letterbox: #000;
+            --platform-disc: #0c1222; --chapter-bg: rgba(0,0,0,0.7); --chapter-border: rgba(255,255,255,0.06);
+            --title-bg: radial-gradient(ellipse at center, #0a0f1e 0%, #000 70%);
+        }
+        body.light {
+            --bg: #f0f4f8; --bg-panel: rgba(255,255,255,0.75); --text: #0f172a; --text-sub: #475569;
+            --accent: #0284c7; --accent2: #6366f1; --accent3: #9333ea;
+            --border: rgba(0,0,0,0.1); --letterbox: #e2e8f0;
+            --platform-disc: #cbd5e1; --chapter-bg: rgba(255,255,255,0.85); --chapter-border: rgba(0,0,0,0.08);
+            --title-bg: radial-gradient(ellipse at center, #e2e8f0 0%, #f8fafc 70%);
+        }
+
+        body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; overflow: hidden; width: 100vw; height: 100vh; transition: background 0.5s, color 0.5s; }
+        #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+        .letterbox { position: fixed; left: 0; width: 100%; height: 50px; background: var(--letterbox); z-index: 100; pointer-events: none; transition: background 0.5s; }
+        .letterbox.top { top: 0; }
+        .letterbox.bottom { bottom: 0; }
+
+        /* Title Overlay */
+        #title-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 200;
+            background: var(--title-bg); display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 1.8s ease, background 0.5s;
+        }
+        #title-overlay.hidden { opacity: 0; pointer-events: none; }
+        #title-overlay h1 {
+            font-size: 48px; font-weight: 800; letter-spacing: 10px; text-transform: uppercase;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 50%, var(--accent3) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            opacity: 0; transform: translateY(20px); animation: titleIn 1.5s 0.5s forwards;
+        }
+        #title-overlay .subtitle { font-size: 13px; font-weight: 300; letter-spacing: 8px; text-transform: uppercase; color: var(--text-sub); margin-top: 18px; opacity: 0; animation: titleIn 1.2s 1.2s forwards; }
+        #title-overlay .credit-line { font-size: 11px; font-weight: 600; color: var(--text-sub); margin-top: 40px; letter-spacing: 3px; text-transform: uppercase; opacity: 0; animation: titleIn 1s 1.8s forwards; }
+        .start-hint {
+            position: absolute; bottom: 90px; font-size: 13px; font-weight: 600; color: var(--text-sub);
+            letter-spacing: 4px; text-transform: uppercase; opacity: 0; animation: titleIn 1s 2.5s forwards, pulse 2.5s 3.5s infinite;
+            cursor: pointer; padding: 14px 36px; border: 1px solid var(--border); border-radius: 30px; transition: all 0.3s; background: none;
+        }
+        .start-hint:hover { background: rgba(56,189,248,0.08); border-color: var(--accent); color: var(--accent); }
+        @keyframes titleIn { to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        /* Subtitles */
+        #subs {
+            position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%);
+            width: 680px; max-width: 88vw; text-align: center;
+            font-size: 16px; font-weight: 400; line-height: 1.7; color: var(--text);
+            text-shadow: 0 1px 10px rgba(0,0,0,0.7);
+            background: var(--bg-panel); backdrop-filter: blur(10px);
+            padding: 16px 28px; border-radius: 12px; z-index: 150;
+            opacity: 0; transition: opacity 0.6s, background 0.5s; letter-spacing: 0.3px;
+            border: 1px solid var(--border);
+        }
+        #subs .cursor { display: inline-block; width: 2px; height: 1em; background: var(--accent); margin-left: 2px; animation: blink 0.7s steps(1) infinite; vertical-align: text-bottom; }
+        @keyframes blink { 0%,50%{opacity:1}51%,100%{opacity:0} }
+
+        /* Structure label */
+        #struct-label {
+            position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+            font-size: 12px; font-weight: 800; letter-spacing: 6px; text-transform: uppercase;
+            color: var(--accent); z-index: 150; opacity: 0; transition: opacity 0.5s, color 0.5s;
+            text-shadow: 0 0 15px rgba(56,189,248,0.3);
+        }
+
+        /* Top Nav Bar */
+        #nav-bar {
+            position: fixed; top: 0; left: 0; width: 100%; height: 50px; z-index: 120;
+            display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
+        }
+        .back-btn {
+            font-size: 11px; font-weight: 700; color: var(--text-sub); text-decoration: none;
+            letter-spacing: 1px; text-transform: uppercase; padding: 6px 14px;
+            border: 1px solid var(--border); border-radius: 6px;
+            transition: all 0.3s; background: var(--bg-panel); backdrop-filter: blur(4px);
+        }
+        .back-btn:hover { color: var(--accent); border-color: var(--accent); }
+        .nav-controls { display: flex; gap: 6px; align-items: center; }
+        .nav-btn {
+            background: var(--bg-panel); border: 1px solid var(--border);
+            color: var(--text-sub); padding: 5px 12px; border-radius: 6px; font-size: 11px;
+            font-weight: 700; cursor: pointer; transition: 0.2s; text-transform: uppercase; letter-spacing: 1px;
+            backdrop-filter: blur(4px);
+        }
+        .nav-btn:hover { color: var(--accent); border-color: var(--accent); }
+        .nav-btn.active { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); color: #ef4444; }
+        .theme-btn {
+            background: var(--bg-panel); border: 1px solid var(--border);
+            color: var(--text-sub); width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+            font-size: 16px; display: flex; align-items: center; justify-content: center;
+            transition: 0.2s; backdrop-filter: blur(4px);
+        }
+        .theme-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+        /* ========== CHAPTER TIMELINE (YouTube-style) ========== */
+        #chapter-bar {
+            position: fixed; bottom: 52px; left: 50%; transform: translateX(-50%);
+            width: 90%; max-width: 900px; z-index: 160;
+            background: var(--chapter-bg); backdrop-filter: blur(12px);
+            border: 1px solid var(--chapter-border); border-radius: 10px;
+            padding: 8px 14px; display: none; /* hidden until tour starts */
+            transition: background 0.5s, border 0.5s;
+        }
+        #chapter-bar.visible { display: block; }
+        .chapter-progress {
+            width: 100%; height: 6px; background: rgba(128,128,128,0.2); border-radius: 3px;
+            position: relative; cursor: pointer; margin-bottom: 8px;
+        }
+        .chapter-progress-fill {
+            position: absolute; top: 0; left: 0; height: 100%; border-radius: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+            transition: width 0.15s linear; pointer-events: none;
+        }
+        .chapter-markers { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .chapter-marker {
+            position: absolute; top: -2px; width: 2px; height: 10px;
+            background: rgba(255,255,255,0.3); border-radius: 1px;
+        }
+        body.light .chapter-marker { background: rgba(0,0,0,0.2); }
+        .chapter-thumbs {
+            display: flex; gap: 0; overflow-x: auto; scrollbar-width: none;
+        }
+        .chapter-thumbs::-webkit-scrollbar { display: none; }
+        .chapter-thumb {
+            flex: 1; min-width: 0; padding: 6px 4px 4px; text-align: center; cursor: pointer;
+            border-radius: 6px; transition: background 0.2s; border: none; background: none;
+            color: var(--text-sub); font-family: inherit;
+        }
+        .chapter-thumb:hover { background: rgba(56,189,248,0.08); }
+        .chapter-thumb.active { color: var(--accent); }
+        .chapter-thumb .ch-num { font-size: 9px; font-weight: 800; letter-spacing: 1px; opacity: 0.5; display: block; }
+        .chapter-thumb .ch-name { font-size: 9px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; margin-top: 2px; }
+    </style>
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+    </script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div class="letterbox top"></div>
+    <div class="letterbox bottom"></div>
+
+    <!-- Title Overlay -->
+    <div id="title-overlay">
+        <h1>Journey Inside the Eye</h1>
+        <div class="subtitle">An Immersive Anatomical Exploration</div>
+        <div class="credit-line">Created by Vihari Battula</div>
+        <button class="start-hint" id="btn-start">▶ &nbsp;Begin the Journey</button>
+    </div>
+
+    <!-- Nav Bar -->
+    <div id="nav-bar">
+        <a href="index.html" class="back-btn">← Back to Simulator</a>
+        <div class="nav-controls">
+            <button class="nav-btn" id="btn-prev" title="Previous chapter">⏮ Prev</button>
+            <button class="nav-btn" id="btn-pause" title="Pause / Resume">⏸ Pause</button>
+            <button class="nav-btn" id="btn-skip" title="Next chapter">Next ⏭</button>
+            <button class="theme-btn" id="btn-theme" title="Toggle Light/Dark">🌙</button>
+        </div>
+    </div>
+
+    <div id="struct-label"></div>
+    <div id="subs"></div>
+
+    <!-- Chapter Timeline -->
+    <div id="chapter-bar">
+        <div class="chapter-progress" id="ch-progress">
+            <div class="chapter-progress-fill" id="ch-fill"></div>
+            <div class="chapter-markers" id="ch-markers"></div>
+        </div>
+        <div class="chapter-thumbs" id="ch-thumbs"></div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // ==========================================
+        // THEME SYSTEM
+        // ==========================================
+        let isDark = true;
+        const bgDark = new THREE.Color('#030712'), bgLight = new THREE.Color('#dfe6ed');
+        const ambDark = 0x8899bb, ambLight = 0xbbccdd;
+
+        function applyTheme() {
+            document.body.classList.toggle('light', !isDark);
+            document.getElementById('btn-theme').innerText = isDark ? '🌙' : '☀️';
+            scene.background.copy(isDark ? bgDark : bgLight);
+            ambientLight.color.setHex(isDark ? ambDark : ambLight);
+            ambientLight.intensity = isDark ? 0.35 : 0.7;
+            // Update platform disc colors
+            exhibits.forEach(g => {
+                g.children.forEach(c => {
+                    if (c.userData.isDisc) c.material.color.setHex(isDark ? 0x0c1222 : 0xcbd5e1);
+                });
+            });
+        }
+        document.getElementById('btn-theme').addEventListener('click', () => { isDark = !isDark; applyTheme(); });
+
+        // ==========================================
+        // SCENE
+        // ==========================================
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#030712');
+        const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 800);
+        camera.position.set(0, 4, 30);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(innerWidth, innerHeight);
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(ambDark, 0.35); scene.add(ambientLight);
+        const camFill = new THREE.PointLight(0x6488cc, 1.5, 60); scene.add(camFill);
+
+        // ==========================================
+        // TEXTURES
+        // ==========================================
+        function drawVeins(ctx, x, y, a, dep, len, w, col) {
+            if (!dep) return;
+            const x2 = x + Math.cos(a)*len, y2 = y + Math.sin(a)*len;
+            ctx.lineWidth = w; ctx.strokeStyle = col; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x2,y2); ctx.stroke();
+            for (let i = 0; i < (Math.random()*2|0)+1; i++) drawVeins(ctx, x2, y2, a+(Math.random()-.5)*1.2, dep-1, len*(.65+Math.random()*.2), w*.7, col);
+        }
+        function makeTex(type) {
+            const s = 512, c = document.createElement('canvas'); c.width = s; c.height = s;
+            const ctx = c.getContext('2d');
+            if (type === 'sclera') { ctx.fillStyle = '#f0f4f8'; ctx.fillRect(0,0,s,s); for (let i=0;i<15;i++) drawVeins(ctx,Math.random()*s,Math.random()*s,Math.random()*6.28,3,35,2,'rgba(239,68,68,0.07)'); }
+            else if (type === 'choroid') { ctx.fillStyle = '#1a0005'; ctx.fillRect(0,0,s,s); for (let i=0;i<25;i++) drawVeins(ctx,Math.random()*s,Math.random()*s,Math.random()*6.28,4,70,10,'rgba(160,25,40,0.5)'); }
+            else if (type === 'retina') { ctx.fillStyle = '#c2405a'; ctx.fillRect(0,0,s,s); const ox=s/2-80,oy=s/2+30; ctx.fillStyle='#fde68a'; ctx.beginPath(); ctx.arc(ox,oy,35,0,6.28); ctx.fill(); for(let i=0;i<10;i++){const a2=Math.random()*6.28; drawVeins(ctx,ox,oy,a2,4,120,6,'rgba(200,30,30,0.75)'); drawVeins(ctx,ox,oy,a2+.1,4,120,9,'rgba(100,10,20,0.7)');} }
+            else if (type === 'iris') { c.width=c.height=512; const gr=ctx.createRadialGradient(256,256,30,256,256,240); gr.addColorStop(0,'#000'); gr.addColorStop(.15,'#0a4a44'); gr.addColorStop(.6,'#0f766e'); gr.addColorStop(.85,'#14b8a6'); gr.addColorStop(1,'#042f2e'); ctx.fillStyle=gr; ctx.fillRect(0,0,512,512); for(let a=0;a<6.28;a+=.04){ctx.strokeStyle=`rgba(167,243,208,${Math.random()*.3})`; ctx.lineWidth=Math.random()*3+1; ctx.beginPath(); ctx.moveTo(256+Math.cos(a)*35,256+Math.sin(a)*35); ctx.bezierCurveTo(256+Math.cos(a)*80,256+Math.sin(a)*80,256+Math.cos(a-.15)*130,256+Math.sin(a-.15)*130,256+Math.cos(a)*240,256+Math.sin(a)*240); ctx.stroke();} }
+            return new THREE.CanvasTexture(c);
+        }
+        const tex = { sclera: makeTex('sclera'), choroid: makeTex('choroid'), retina: makeTex('retina'), iris: makeTex('iris') };
+
+        // ==========================================
+        // EXHIBIT SYSTEM
+        // ==========================================
+        const SPACING = 45;
+        const exhibits = [];
+        const SG = 40;
+
+        function addExhibit(idx, buildFn) {
+            const grp = new THREE.Group();
+            grp.position.z = -idx * SPACING;
+            buildFn(grp);
+            // Platform ring
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(10, 0.12, 8, 64), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.25 }));
+            ring.rotation.x = -Math.PI / 2; ring.position.y = -7.5; grp.add(ring);
+            const disc = new THREE.Mesh(new THREE.CircleGeometry(10, 64), new THREE.MeshStandardMaterial({ color: 0x0c1222, roughness: 1, side: THREE.DoubleSide }));
+            disc.rotation.x = -Math.PI / 2; disc.position.y = -7.6; disc.userData.isDisc = true; grp.add(disc);
+            // Exhibit lighting
+            const light = new THREE.PointLight(0xffffff, 45, 50, 2);
+            light.position.set(2, 14, 3); grp.add(light);
+            const rim = new THREE.PointLight(0x818cf8, 14, 30, 2);
+            rim.position.set(-6, 2, -5); grp.add(rim);
+            // Extra front fill light for better visibility
+            const front = new THREE.PointLight(0xffffff, 10, 35, 2);
+            front.position.set(0, 3, 12); grp.add(front);
+
+            scene.add(grp);
+            exhibits.push(grp);
+        }
+
+        // ---------- Exhibit 0: Full Eye Globe (FRONT-FACING) ----------
+        addExhibit(0, grp => {
+            // Full sphere sclera so you can see the complete exterior
+            const sclera = new THREE.Mesh(new THREE.SphereGeometry(6, SG, SG), new THREE.MeshStandardMaterial({ map: tex.sclera, color: 0xffffff, roughness: 0.3 }));
+            grp.add(sclera);
+            // Cornea dome — prominent at the front
+            const corn = new THREE.Mesh(new THREE.SphereGeometry(4.2, SG, SG, 0, Math.PI * 2, 0, Math.PI / 3),
+                new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.2, transmission: 0.95, roughness: 0.02, ior: 1.376, clearcoat: 1, side: THREE.DoubleSide }));
+            corn.rotation.x = Math.PI / 2; corn.position.z = 4.5; grp.add(corn);
+            // Iris — visible through cornea
+            const ir = new THREE.Mesh(new THREE.RingGeometry(1.3, 3.4, SG), new THREE.MeshStandardMaterial({ map: tex.iris, roughness: 0.4, side: THREE.DoubleSide }));
+            ir.position.z = 4.7; grp.add(ir);
+            // Pupil (black disc)
+            const pupil = new THREE.Mesh(new THREE.CircleGeometry(1.3, SG), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }));
+            pupil.position.z = 4.68; grp.add(pupil);
+            // Lens visible through pupil
+            const lens = new THREE.Mesh(new THREE.SphereGeometry(2.2, SG, SG), new THREE.MeshPhysicalMaterial({ color: 0xfefce8, transparent: true, opacity: 0.4, transmission: 0.9, roughness: 0, ior: 1.4, side: THREE.DoubleSide }));
+            lens.position.z = 4; lens.scale.z = 0.45; grp.add(lens);
+            // Subtle scleral veins (red line details on surface)
+            const veinMat = new THREE.LineBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.15 });
+            for (let i = 0; i < 8; i++) {
+                const pts = [];
+                const baseA = Math.random() * Math.PI * 2, baseP = Math.PI * 0.3 + Math.random() * 0.4;
+                for (let j = 0; j <= 8; j++) {
+                    const a = baseA + (j / 8) * 0.6, p = baseP + (Math.random() - 0.5) * 0.15;
+                    pts.push(new THREE.Vector3(Math.sin(p) * Math.cos(a) * 6.15, Math.cos(p) * 6.15, Math.sin(p) * Math.sin(a) * 6.15));
+                }
+                grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), veinMat));
+            }
+            // Optic nerve stub at back
+            const nMat = new THREE.MeshStandardMaterial({ color: 0xfce7b6, roughness: 0.7 });
+            for (let i = 0; i < 12; i++) {
+                const f = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.5, 6), nMat);
+                f.position.set((Math.random()-.5)*0.8, -1.25, (Math.random()-.5)*0.8);
+                const ng = new THREE.Group(); ng.add(f);
+                ng.rotation.x = Math.PI / 2; ng.position.set(0.8, -0.4, -6);
+                grp.add(ng);
+            }
+            // Eye faces camera — rotate so cornea/iris face +Z (toward camera)
+            // No rotation needed now since cornea is already at +Z
+        });
+
+        // ---------- Exhibit 1: Cornea ----------
+        addExhibit(1, grp => {
+            const outer = new THREE.Mesh(new THREE.SphereGeometry(7, SG, SG, 0, Math.PI * 2, 0, Math.PI / 2.8),
+                new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.35, transmission: 0.92, roughness: 0.02, ior: 1.376, thickness: 1.5, clearcoat: 1, side: THREE.FrontSide }));
+            outer.rotation.x = Math.PI / 2; grp.add(outer);
+            const inner = new THREE.Mesh(new THREE.SphereGeometry(6.5, SG, SG, 0, Math.PI * 2, 0, Math.PI / 2.8),
+                new THREE.MeshPhysicalMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.25, roughness: 0.1, side: THREE.BackSide }));
+            inner.rotation.x = Math.PI / 2; grp.add(inner);
+            const rimMesh = new THREE.Mesh(new THREE.TorusGeometry(6.75, 0.2, 8, 64), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.5 }));
+            rimMesh.rotation.x = Math.PI / 2; rimMesh.position.z = -2; grp.add(rimMesh);
+            // Layer labels as colored rings showing corneal layers
+            const layerCols = [0xfbbf24, 0xf97316, 0x38bdf8, 0x22d3ee, 0xa78bfa];
+            layerCols.forEach((c, i) => {
+                const lr = new THREE.Mesh(new THREE.TorusGeometry(6.6 - i*0.12, 0.06, 6, 48), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.5 }));
+                lr.rotation.x = Math.PI / 2; lr.position.z = -1.6 - i * 0.15; grp.add(lr);
+            });
+            // Light refraction lines
+            const refMat = new THREE.LineBasicMaterial({ color: 0xfde68a, transparent: true, opacity: 0.5 });
+            for (let i = -3; i <= 3; i++) {
+                const pts = [new THREE.Vector3(i * 0.8, 0, 8), new THREE.Vector3(i * 0.3, 0, 0), new THREE.Vector3(0, 0, -5)];
+                grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), refMat));
+            }
+        });
+
+        // ---------- Exhibit 2: Iris & Pupil ----------
+        addExhibit(2, grp => {
+            const ir = new THREE.Mesh(new THREE.RingGeometry(2, 7, 64), new THREE.MeshStandardMaterial({ map: tex.iris, roughness: 0.4, side: THREE.DoubleSide }));
+            grp.add(ir);
+            // Back plate so iris pops visually
+            const back = new THREE.Mesh(new THREE.CircleGeometry(7.2, 48), new THREE.MeshStandardMaterial({ color: 0x0a2a2a, roughness: 0.9, side: THREE.DoubleSide }));
+            back.position.z = -0.15; grp.add(back);
+            const sphincter = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.25, 12, 48), new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.7 }));
+            grp.add(sphincter);
+            const dMat = new THREE.LineBasicMaterial({ color: 0xfca5a5, transparent: true, opacity: 0.4 });
+            for (let a = 0; a < Math.PI * 2; a += Math.PI / 12) {
+                grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(Math.cos(a) * 2.5, Math.sin(a) * 2.5, 0.05),
+                    new THREE.Vector3(Math.cos(a) * 6.8, Math.sin(a) * 6.8, 0.05)
+                ]), dMat));
+            }
+            const pupil = new THREE.Mesh(new THREE.CircleGeometry(2, 48), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }));
+            pupil.position.z = -0.05; grp.add(pupil);
+            const outer = new THREE.Mesh(new THREE.TorusGeometry(7, 0.15, 8, 64), new THREE.MeshBasicMaterial({ color: 0x134e4a, transparent: true, opacity: 0.5 }));
+            grp.add(outer);
+        });
+
+        // ---------- Exhibit 3: Crystalline Lens + Zonules ----------
+        addExhibit(3, grp => {
+            const lens = new THREE.Mesh(new THREE.SphereGeometry(4, SG, SG), new THREE.MeshPhysicalMaterial({ color: 0xfefce8, transparent: true, opacity: 0.55, transmission: 0.88, roughness: 0, ior: 1.406, clearcoat: 1, side: THREE.DoubleSide }));
+            lens.scale.z = 0.4; grp.add(lens);
+            // Lens nucleus (slightly more opaque center)
+            const nucleus = new THREE.Mesh(new THREE.SphereGeometry(2.5, 24, 24), new THREE.MeshPhysicalMaterial({ color: 0xfef9c3, transparent: true, opacity: 0.3, roughness: 0.1, side: THREE.DoubleSide }));
+            nucleus.scale.z = 0.35; grp.add(nucleus);
+            const cil = new THREE.Mesh(new THREE.TorusGeometry(6.5, 0.6, 12, SG), new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.7 }));
+            grp.add(cil);
+            const zMat = new THREE.LineBasicMaterial({ color: 0xfef3c7, transparent: true, opacity: 0.55 });
+            for (let i = 0; i < 36; i++) {
+                const a = (i / 36) * Math.PI * 2;
+                grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(Math.cos(a) * 6.5, Math.sin(a) * 6.5, 0),
+                    new THREE.Vector3(Math.cos(a) * 3.8, Math.sin(a) * 3.8, (Math.random() - 0.5) * 0.3)
+                ]), zMat));
+            }
+            const aMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.5 });
+            for (let s of [-1, 1]) {
+                const arr = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.8, 6), aMat);
+                arr.position.set(s * 5.2, 0, 0); arr.rotation.z = s * Math.PI / 2; grp.add(arr);
+            }
+        });
+
+        // ---------- Exhibit 4: Retina Cross-Section ----------
+        addExhibit(4, grp => {
+            const layers = [
+                { name: 'Nerve Fiber Layer', color: 0xfbbf24, y: 2.4, h: 0.35 },
+                { name: 'Ganglion Cells', color: 0xf97316, y: 1.8, h: 0.45 },
+                { name: 'Inner Plexiform', color: 0xfb923c, y: 1.15, h: 0.35 },
+                { name: 'Inner Nuclear', color: 0xef4444, y: 0.5, h: 0.45 },
+                { name: 'Outer Plexiform', color: 0xf43f5e, y: -0.1, h: 0.3 },
+                { name: 'Outer Nuclear', color: 0xec4899, y: -0.65, h: 0.45 },
+                { name: 'Photoreceptors', color: 0x8b5cf6, y: -1.3, h: 0.55 },
+                { name: 'RPE', color: 0x1e1b4b, y: -2.0, h: 0.2 },
+                { name: "Bruch's Membrane", color: 0x78350f, y: -2.35, h: 0.12 }
+            ];
+            layers.forEach(l => {
+                const geo = new THREE.BoxGeometry(14, l.h, 8, 20, 1, 1);
+                const pos = geo.attributes.position;
+                for (let i = 0; i < pos.count; i++) pos.setY(i, pos.getY(i) + l.y + Math.cos(pos.getX(i) * 0.18) * 0.8);
+                geo.computeVertexNormals();
+                grp.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: l.color, roughness: 0.55, metalness: 0.05 })));
+            });
+            const lMat = new THREE.LineBasicMaterial({ color: 0xfde68a, transparent: true, opacity: 0.4 });
+            for (let x = -4; x <= 4; x += 2) {
+                grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x, 4, 0), new THREE.Vector3(x, -2.5, 0)]), lMat));
+                const ah = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 6), new THREE.MeshBasicMaterial({ color: 0xfde68a, transparent: true, opacity: 0.4 }));
+                ah.position.set(x, -2.7, 0); ah.rotation.z = Math.PI; grp.add(ah);
+            }
+        });
+
+        // ---------- Exhibit 5: Photoreceptor Forest ----------
+        addExhibit(5, grp => {
+            const rodGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.8, 6); rodGeo.translate(0, 0.4, 0);
+            const coneGeo = new THREE.ConeGeometry(0.09, 0.65, 6); coneGeo.translate(0, 0.325, 0);
+            const rodInst = new THREE.InstancedMesh(rodGeo, new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.4 }), 800);
+            const coneInst = new THREE.InstancedMesh(coneGeo, new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.4 }), 350);
+            const tmpMat = new THREE.Matrix4();
+            let ri2 = 0, ci2 = 0;
+            for (let i = 0; i < 1200; i++) {
+                const r = Math.sqrt(i / 1200) * 6, theta = i * 2.399;
+                const x = Math.cos(theta) * r, z = Math.sin(theta) * r;
+                const dist = Math.sqrt(x * x + z * z);
+                tmpMat.makeTranslation(x, -dist * 0.08, z);
+                if (dist < 2 && ci2 < 350) coneInst.setMatrixAt(ci2++, tmpMat);
+                else if (ri2 < 800) rodInst.setMatrixAt(ri2++, tmpMat);
+            }
+            grp.add(rodInst); grp.add(coneInst);
+            const surf = new THREE.Mesh(new THREE.CircleGeometry(7, 48), new THREE.MeshStandardMaterial({ color: 0x881337, roughness: 0.8, side: THREE.DoubleSide }));
+            surf.rotation.x = -Math.PI / 2; surf.position.y = -0.15; grp.add(surf);
+            const fov = new THREE.Mesh(new THREE.TorusGeometry(1.8, 0.08, 8, 48), new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.6 }));
+            fov.rotation.x = -Math.PI / 2; fov.position.y = 0.02; grp.add(fov);
+        });
+
+        // ---------- Exhibit 6: Optic Nerve ----------
+        addExhibit(6, grp => {
+            const discM = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.4, 32), new THREE.MeshStandardMaterial({ color: 0xfce7b6, roughness: 0.7 }));
+            discM.rotation.x = Math.PI / 2; discM.position.z = 0.2; grp.add(discM);
+            const cup = new THREE.Mesh(new THREE.SphereGeometry(0.8, 24, 24), new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.5 }));
+            cup.scale.z = 0.4; grp.add(cup);
+            const nMat = new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.6 });
+            for (let i = 0; i < 50; i++) {
+                const a = (i / 50) * Math.PI * 2, r = Math.random() * 1.2;
+                const fiber = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 8, 6), nMat);
+                fiber.position.set(Math.cos(a) * r, 0, Math.sin(a) * r - 4.2);
+                fiber.rotation.x = Math.PI / 2; grp.add(fiber);
+            }
+            const retSurf = new THREE.Mesh(new THREE.RingGeometry(2, 8, 48), new THREE.MeshStandardMaterial({ map: tex.retina, roughness: 0.6, side: THREE.DoubleSide }));
+            retSurf.position.z = 0.3; grp.add(retSurf);
+        });
+
+        // ---------- Exhibit 7: Choroid Vasculature ----------
+        addExhibit(7, grp => {
+            const cGeo = new THREE.PlaneGeometry(14, 10, 30, 20);
+            const cPos = cGeo.attributes.position;
+            for (let i = 0; i < cPos.count; i++) { const x = cPos.getX(i), y = cPos.getY(i); cPos.setZ(i, Math.cos(x * 0.15) * 2 + Math.cos(y * 0.2) * 1); }
+            cGeo.computeVertexNormals();
+            grp.add(new THREE.Mesh(cGeo, new THREE.MeshStandardMaterial({ map: tex.choroid, color: 0x600015, roughness: 0.7, side: THREE.DoubleSide })));
+            const vMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.5 });
+            for (let i = 0; i < 10; i++) {
+                const pts = []; let x = (Math.random() - 0.5) * 12, y = -5;
+                for (let j = 0; j < 8; j++) { pts.push(new THREE.Vector3(x, y, Math.cos(x * 0.15) * 2 + Math.cos(y * 0.2) * 1 + 0.25)); x += (Math.random() - 0.5) * 2; y += 1.5; }
+                grp.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.12 + Math.random() * 0.18, 8, false), vMat));
+            }
+            const sGeo = new THREE.PlaneGeometry(14, 10, 30, 20);
+            const sPos = sGeo.attributes.position;
+            for (let i = 0; i < sPos.count; i++) { const x2 = sPos.getX(i), y2 = sPos.getY(i); sPos.setZ(i, Math.cos(x2 * 0.15) * 2 + Math.cos(y2 * 0.2) * 1 - 0.5); }
+            sGeo.computeVertexNormals();
+            grp.add(new THREE.Mesh(sGeo, new THREE.MeshStandardMaterial({ map: tex.sclera, color: 0xf1f5f9, roughness: 0.3, side: THREE.DoubleSide })));
+        });
+
+        // ---------- Exhibit 8: Complete System ----------
+        addExhibit(8, grp => {
+            const sc = new THREE.Mesh(new THREE.SphereGeometry(6, SG, SG, 0, Math.PI * 1.6), new THREE.MeshStandardMaterial({ map: tex.sclera, color: 0xffffff, roughness: 0.3 }));
+            grp.add(sc);
+            const ch = new THREE.Mesh(new THREE.SphereGeometry(5.85, SG, SG, 0, Math.PI * 1.6), new THREE.MeshStandardMaterial({ map: tex.choroid, color: 0x400010, roughness: 0.8, side: THREE.BackSide }));
+            grp.add(ch);
+            const rt = new THREE.Mesh(new THREE.SphereGeometry(5.7, SG, SG, 0, Math.PI * 1.6), new THREE.MeshStandardMaterial({ map: tex.retina, color: 0xdb2777, roughness: 0.6, side: THREE.BackSide }));
+            grp.add(rt);
+            const ln = new THREE.Mesh(new THREE.SphereGeometry(2.2, 24, 24), new THREE.MeshPhysicalMaterial({ color: 0xfefce8, transparent: true, opacity: 0.45, transmission: 0.9, roughness: 0, ior: 1.4, side: THREE.DoubleSide }));
+            ln.position.z = 4; ln.scale.z = 0.45; grp.add(ln);
+            const irisM = new THREE.Mesh(new THREE.RingGeometry(1.3, 3.2, 48), new THREE.MeshStandardMaterial({ map: tex.iris, roughness: 0.5, side: THREE.DoubleSide }));
+            irisM.position.z = 4.6; grp.add(irisM);
+            const nGrp = new THREE.Group();
+            for (let i = 0; i < 20; i++) { const f = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3, 6), new THREE.MeshStandardMaterial({ color: 0xfce7b6 })); f.position.set((Math.random()-.5)*1, -1.5, (Math.random()-.5)*1); nGrp.add(f); }
+            nGrp.rotation.x = Math.PI / 2; nGrp.position.set(1, -0.5, -6); grp.add(nGrp);
+            const rMat2 = new THREE.LineBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.55 });
+            for (let y = -2; y <= 2; y += 1) grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, y, 18), new THREE.Vector3(0, y * 0.7, 5), new THREE.Vector3(0, 0, -5.5)]), rMat2));
+            grp.rotation.y = 0.3;
+        });
+
+        // ==========================================
+        // TOUR DATA
+        // ==========================================
+        const TOUR = [
+            { eIdx: 0, cam: [0, 2, 16], dur: 9, label: 'THE HUMAN EYE',
+              txt: 'At just 24 millimeters in diameter, the human eye processes more visual data than any camera ever built. Here you see the cornea, iris, and pupil — the structures that greet the outside world and control light entry into the visual system.' },
+            { eIdx: 1, cam: [0, 2, 14], dur: 8, label: 'THE CORNEA',
+              txt: 'The cornea is the eye\'s transparent window, responsible for 70 percent of its focusing power at 43 diopters. Five distinct layers — epithelium, Bowman\'s, stroma, Descemet\'s, and endothelium — each play critical roles in maintaining clarity.' },
+            { eIdx: 2, cam: [0, 3, 12], dur: 8, label: 'THE IRIS & PUPIL',
+              txt: 'The iris — a living aperture with a pattern as unique as a fingerprint. The sphincter pupillae muscle constricts in bright light, while delicate radial dilator fibers open the pupil in darkness, controlling light entry with remarkable precision.' },
+            { eIdx: 3, cam: [0, 4, 13], dur: 8, label: 'CRYSTALLINE LENS & ACCOMMODATION',
+              txt: 'Suspended by delicate zonular fibers from the ciliary body, the lens changes shape to focus at different distances — a process called accommodation. With age it stiffens, causing presbyopia. Clouding produces cataracts, the leading cause of reversible blindness worldwide.' },
+            { eIdx: 4, cam: [0, 6, 14], dur: 9, label: 'THE RETINA — LAYERED ARCHITECTURE',
+              txt: 'The retina is a multi-layered neural tissue only 0.5 millimeters thick, yet containing nine distinct functional layers. Light paradoxically passes through all layers before reaching the photoreceptors at the back — a consequence of the eye\'s evolutionary inverted design.' },
+            { eIdx: 5, cam: [0, 6, 12], dur: 8, label: 'PHOTORECEPTOR FOREST',
+              txt: 'At the fovea, over 200,000 cone cells per square millimeter provide ultra-high-acuity color vision. The surrounding 120 million rods enable low-light and peripheral vision. Together they convert photons into the electrical language of the brain.' },
+            { eIdx: 6, cam: [0, 3, 14], dur: 8, label: 'THE OPTIC NERVE',
+              txt: 'Where 1.2 million retinal ganglion cell axons converge and exit as the optic nerve. This junction — the optic disc — creates the physiological blind spot, and is the primary site of irreversible damage in glaucoma.' },
+            { eIdx: 7, cam: [0, 3, 14], dur: 8, label: 'CHOROID — THE VASCULAR HIGHWAY',
+              txt: 'Between sclera and retina lies the choroid — among the most metabolically active tissues in the body. Its dense fractal vascular network delivers oxygen and nutrients, consuming more oxygen per gram than any other human tissue.' },
+            { eIdx: 8, cam: [14, 5, 12], dur: 10, label: 'THE COMPLETE SYSTEM',
+              txt: 'From cornea to optic nerve, each structure serves a precise role in transforming photons into perception. When myopia elongates this globe, when glaucoma crushes these nerves, when the retina tears free — understanding this anatomy is the first step toward preservation.' }
+        ];
+
+        // ==========================================
+        // CHAPTER TIMELINE UI (YouTube-style)
+        // ==========================================
+        const chBar = document.getElementById('chapter-bar');
+        const chFill = document.getElementById('ch-fill');
+        const chThumbs = document.getElementById('ch-thumbs');
+        const chMarkers = document.getElementById('ch-markers');
+        const chProgress = document.getElementById('ch-progress');
+
+        // Build chapter thumbs and markers
+        TOUR.forEach((s, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'chapter-thumb';
+            btn.id = `ch-${i}`;
+            btn.innerHTML = `<span class="ch-num">${i + 1}/${TOUR.length}</span><span class="ch-name">${s.label}</span>`;
+            btn.addEventListener('click', () => jumpToChapter(i));
+            chThumbs.appendChild(btn);
+
+            if (i > 0) {
+                const marker = document.createElement('div');
+                marker.className = 'chapter-marker';
+                marker.style.left = `${(i / TOUR.length) * 100}%`;
+                chMarkers.appendChild(marker);
+            }
+        });
+
+        // Click on progress bar to seek
+        chProgress.addEventListener('click', e => {
+            if (!tourActive) return;
+            const rect = chProgress.getBoundingClientRect();
+            const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const targetIdx = Math.floor(pct * TOUR.length);
+            jumpToChapter(Math.min(targetIdx, TOUR.length - 1));
+        });
+
+        function updateChapterUI() {
+            document.querySelectorAll('.chapter-thumb').forEach((btn, i) => {
+                btn.classList.toggle('active', i === stopIdx);
+            });
+            // Scroll active chapter into view
+            const activeBtn = document.getElementById(`ch-${stopIdx}`);
+            if (activeBtn) activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+
+        // ==========================================
+        // TOUR ENGINE
+        // ==========================================
+        const subs = document.getElementById('subs');
+        const structLabel = document.getElementById('struct-label');
+        let tourActive = false, paused = false, stopIdx = 0, elapsed = 0;
+        let twTimer = null, twIdx = 0;
+        let prevCamPos = new THREE.Vector3(0, 4, 30);
+
+        function easeIO(t) { return t < 0.5 ? 8*t*t*t*t : 1 - Math.pow(-2*t+2, 4)/2; }
+
+        function typewriter(text, el) {
+            if (twTimer) clearInterval(twTimer);
+            twIdx = 0; el.innerHTML = '<span class="cursor"></span>'; el.style.opacity = '1';
+            twTimer = setInterval(() => {
+                if (twIdx < text.length) { el.innerHTML = text.substring(0, twIdx + 1) + '<span class="cursor"></span>'; twIdx++; }
+                else { clearInterval(twTimer); twTimer = null; el.innerHTML = text; }
+            }, 28);
+        }
+
+        function loadStop(idx) {
+            const s = TOUR[idx];
+            typewriter(s.txt, subs);
+            structLabel.innerText = s.label; structLabel.style.opacity = '1';
+            updateChapterUI();
+        }
+
+        function beginTour() {
+            tourActive = true; paused = false; stopIdx = 0; elapsed = 0;
+            document.getElementById('title-overlay').classList.add('hidden');
+            chBar.classList.add('visible');
+            prevCamPos.copy(camera.position);
+            loadStop(0);
+        }
+
+        function endTour() {
+            tourActive = false; subs.style.opacity = '0'; structLabel.style.opacity = '0';
+            chFill.style.width = '100%';
+        }
+
+        function jumpToChapter(idx) {
+            if (!tourActive) beginTour();
+            // Snap camera to the exhibit
+            if (stopIdx !== idx) {
+                const s = TOUR[idx];
+                const center = new THREE.Vector3(0, 0, -s.eIdx * SPACING);
+                camera.position.set(center.x + s.cam[0], center.y + s.cam[1], center.z + s.cam[2]);
+            }
+            prevCamPos.copy(camera.position);
+            stopIdx = idx; elapsed = 0;
+            paused = false;
+            document.getElementById('btn-pause').innerText = '⏸ Pause';
+            document.getElementById('btn-pause').classList.remove('active');
+            loadStop(idx);
+        }
+
+        function skipStop() {
+            if (!tourActive) return;
+            elapsed = 0;
+            const s = TOUR[stopIdx];
+            const center = new THREE.Vector3(0, 0, -s.eIdx * SPACING);
+            camera.position.set(center.x + s.cam[0], center.y + s.cam[1], center.z + s.cam[2]);
+            prevCamPos.copy(camera.position);
+            stopIdx++;
+            if (stopIdx >= TOUR.length) { endTour(); return; }
+            loadStop(stopIdx);
+        }
+
+        function prevStop() {
+            if (!tourActive || stopIdx === 0) return;
+            elapsed = 0;
+            stopIdx--;
+            const s = TOUR[stopIdx];
+            const center = new THREE.Vector3(0, 0, -s.eIdx * SPACING);
+            camera.position.set(center.x + s.cam[0], center.y + s.cam[1], center.z + s.cam[2]);
+            prevCamPos.copy(camera.position);
+            loadStop(stopIdx);
+        }
+
+        function togglePause() {
+            paused = !paused;
+            const btn = document.getElementById('btn-pause');
+            btn.innerText = paused ? '▶ Resume' : '⏸ Pause';
+            btn.classList.toggle('active', paused);
+        }
+
+        document.getElementById('btn-start').addEventListener('click', beginTour);
+        document.getElementById('btn-pause').addEventListener('click', togglePause);
+        document.getElementById('btn-skip').addEventListener('click', skipStop);
+        document.getElementById('btn-prev').addEventListener('click', prevStop);
+        document.addEventListener('keydown', e => {
+            if (e.code === 'Space') { e.preventDefault(); if (tourActive) togglePause(); else beginTour(); }
+            if (e.code === 'ArrowRight') skipStop();
+            if (e.code === 'ArrowLeft') prevStop();
+        });
+
+        function updateTour(delta) {
+            if (!tourActive || paused) return;
+            elapsed += delta;
+            const stop = TOUR[stopIdx];
+            const t = Math.min(1, elapsed / stop.dur);
+            const eased = easeIO(t);
+
+            const center = new THREE.Vector3(0, 0, -stop.eIdx * SPACING);
+            const targetCamPos = new THREE.Vector3(center.x + stop.cam[0], center.y + stop.cam[1], center.z + stop.cam[2]);
+
+            camera.position.lerpVectors(prevCamPos, targetCamPos, eased);
+            camera.position.x += Math.sin(elapsed * 0.25) * 0.5;
+            camera.position.y += Math.sin(elapsed * 0.18) * 0.3;
+            camera.lookAt(center);
+
+            // Update progress fill
+            const totalPct = ((stopIdx + t) / TOUR.length) * 100;
+            chFill.style.width = totalPct + '%';
+
+            if (t >= 1) {
+                prevCamPos.copy(camera.position);
+                elapsed = 0; stopIdx++;
+                if (stopIdx >= TOUR.length) { endTour(); return; }
+                loadStop(stopIdx);
+            }
+        }
+
+        // ==========================================
+        // RENDER
+        // ==========================================
+        const clock = new THREE.Clock();
+        let time = 0;
+
+        function render() {
+            requestAnimationFrame(render);
+            const delta = clock.getDelta();
+            time += delta;
+
+            exhibits.forEach(g => { g.rotation.y += delta * 0.06; });
+            camFill.position.copy(camera.position).add(new THREE.Vector3(3, 2, 3));
+
+            if (!tourActive) {
+                camera.position.x = Math.sin(time * 0.12) * 3;
+                camera.position.y = 4 + Math.sin(time * 0.08) * 1;
+                camera.lookAt(0, 0, 0);
+            }
+
+            updateTour(delta);
+            renderer.render(scene, camera);
+        }
+
+        addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+        render();
+    </script>
+</body>
+</html>

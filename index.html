@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Cinematic Eye Simulation</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel-bg: rgba(15, 23, 42, 0.65);
+            --panel-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --danger: #ef4444;
+            --success: #10b981;
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        body.light-mode {
+            --bg: #f8fafc;
+            --panel-bg: rgba(255, 255, 255, 0.85);
+            --panel-border: rgba(15, 23, 42, 0.15);
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --glass-shadow: 0 8px 25px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        body { margin: 0; overflow: hidden; background-color: var(--bg); color: var(--text-main); font-family: 'Inter', system-ui, sans-serif; transition: background-color 0.5s; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+        
+        /* Focus styles for keyboard accessibility */
+        *:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+        /* Glassmorphism Layout */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; padding: 20px; box-sizing: border-box; justify-content: space-between;}
+        
+        .side-bar {
+            width: 380px; display: flex; flex-direction: column; gap: 15px;
+            max-height: 100%; overflow-y: auto; pointer-events: none; padding-bottom: 50px;
+        }
+        
+        .side-bar::-webkit-scrollbar { display: none; }
+        .side-bar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .glass-panel { 
+            background: var(--panel-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            padding: 20px; border-radius: 16px; pointer-events: auto; 
+            border: 1px solid var(--panel-border); box-shadow: var(--glass-shadow);
+            transition: all 0.3s;
+        }
+        
+        h1 { margin: 0 0 4px 0; font-size: 22px; font-weight: 800; background: linear-gradient(to right, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;}
+        .credit { font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;}
+        
+        .header-bg { display: flex; justify-content: space-between; align-items: flex-start; }
+        
+        /* Accordion Collapsible Panels */
+        .panel-header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            cursor: pointer; width: 100%; background: none; border: none; padding: 0 0 6px 0;
+            color: var(--text-main); font-family: inherit;
+            border-bottom: 1px solid var(--panel-border); 
+        }
+        .panel-header h2 { margin: 0; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; }
+        .panel-toggle-icon { transition: transform 0.3s; font-size: 12px; }
+        .collapsed .panel-toggle-icon { transform: rotate(-90deg); }
+        .panel-content { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; overflow: hidden; transition: max-height 0.3s ease-in-out, opacity 0.3s; max-height: 600px; opacity: 1; }
+        .collapsed .panel-content { max-height: 0; opacity: 0; margin-top: 0; pointer-events: none;}
+        
+        p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-muted); }
+        
+        .control-block { display: flex; flex-direction: column; margin-bottom: 5px; }
+        
+        .slider-row { display: flex; flex-direction: column; gap: 4px; }
+        .slider-labels { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--text-muted); }
+        input[type="range"] { width: 100%; cursor: pointer; accent-color: var(--accent); }
+        
+        .toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 500;}
+        
+        .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(120,120,120,0.4); transition: .3s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(16px); }
+        input.danger:checked + .slider { background-color: var(--danger); }
+        input.success:checked + .slider { background-color: var(--success); }
+
+        .btn { padding: 8px 16px; background: rgba(120,120,120,0.15); color: var(--text-main); border: 1px solid var(--panel-border); border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; transition: 0.2s;}
+        .btn:hover { background: rgba(120,120,120,0.3); }
+        .btn-primary { background: linear-gradient(135deg, #2563eb, #3b82f6); color: white; border: none; }
+        .btn-primary:hover { box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+        .btn-explore { background: linear-gradient(135deg, #7c3aed, #a855f7); color: white; border: none; font-size: 13px; padding: 10px 18px; }
+        .btn-explore:hover { box-shadow: 0 0 15px rgba(168, 85, 247, 0.5); transform: translateY(-1px); }
+
+        /* Info Description Blocks */
+        .info-desc {
+            font-size: 11px; line-height: 1.55; color: var(--text-muted);
+            background: rgba(56, 189, 248, 0.06); border-left: 2px solid var(--accent);
+            padding: 8px 10px; border-radius: 0 6px 6px 0; margin-top: 4px;
+            max-height: 0; overflow: hidden; opacity: 0;
+            transition: max-height 0.4s ease, opacity 0.3s, padding 0.3s, margin 0.3s;
+            padding: 0 10px;
+        }
+        .info-desc.open { max-height: 200px; opacity: 1; padding: 8px 10px; margin-top: 6px; }
+        .info-toggle-btn {
+            background: none; border: none; color: var(--accent); font-size: 10px; 
+            cursor: pointer; padding: 2px 0; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.5px; opacity: 0.7; transition: 0.2s;
+        }
+        .info-toggle-btn:hover { opacity: 1; }
+        .info-desc.danger-info { background: rgba(239, 68, 68, 0.06); border-left-color: var(--danger); }
+        .info-desc.success-info { background: rgba(16, 185, 129, 0.06); border-left-color: var(--success); }
+
+        /* Animation Progress Bar */
+        .anim-bar-track { width: 100%; height: 3px; background: rgba(120,120,120,0.2); border-radius: 3px; margin-top: 4px; overflow: hidden; }
+        .anim-bar-fill { height: 100%; width: 0%; border-radius: 3px; transition: width 0.1s linear; }
+        .anim-bar-fill.danger { background: linear-gradient(90deg, #f97316, #ef4444); }
+
+        /* POV Viewport in Right Sidebar */
+        #pov-container {
+            width: 100%; height: 220px; background: #000; border-radius: 12px; overflow: hidden;
+            display: flex; flex-direction: column; position: relative; border: 1px solid var(--panel-border);
+        }
+        #pov-header { background: rgba(0,0,0,0.5); color: #fff; padding: 6px 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; z-index: 20; position: absolute; width: 100%; box-sizing: border-box; backdrop-filter: blur(4px); }
+        #pov-canvas-wrapper { flex: 1; position: relative; overflow: hidden; transition: filter 0.2s; }
+        #pov-glaucoma-mask { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; background: radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.95) 90%); opacity: 0; transition: opacity 0.15s; }
+        #pov-detachment-mask { position: absolute; top:-20%; left:0; width:100%; height:100%; pointer-events:none; z-index:11; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 L100,0 L100,40 Q80,60 50,45 Q20,30 0,65 Z" fill="rgba(0,0,0,0.9)"/></svg>'); background-size: 100% 100%; opacity: 0; transition: opacity 0.15s, transform 0.15s; transform: translateY(-20px); }
+
+        /* Cinematic Letterbox Bars */
+        .letterbox-bar {
+            position: fixed; left: 0; width: 100%; height: 0; background: #000; z-index: 200;
+            transition: height 1s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none;
+        }
+        .letterbox-bar.top { top: 0; }
+        .letterbox-bar.bottom { bottom: 0; }
+        .letterbox-bar.active { height: 55px; }
+
+        /* Cinematic Tour Overlay */
+        #tour-dock {
+            position: absolute; bottom: 25px; right: 25px; pointer-events: auto;
+            display: flex; flex-direction: column; align-items: flex-end; gap: 15px; 
+            transition: all 0.5s; z-index: 50;
+        }
+        
+        .tour-button {
+            background: var(--text-main); color: var(--bg); padding: 12px 24px; border-radius: 30px; font-weight: 800; font-size: 14px;
+            cursor: pointer; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: 0.3s;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .tour-button:hover { transform: scale(1.05); }
+        .tour-button.active { background: var(--danger); color: white; box-shadow: 0 4px 15px rgba(239,68,68,0.4); }
+
+        #subtitles-box {
+            position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%); width: 650px; max-width: 90vw;
+            text-align: center; color: white; font-size: 19px; font-weight: 500; line-height: 1.5;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.9), 0 0 30px rgba(0,0,0,0.5);
+            pointer-events: none; opacity: 0; transition: opacity 0.6s; 
+            background: rgba(0,0,0,0.45); padding: 14px 20px; border-radius: 10px;
+            backdrop-filter: blur(4px); letter-spacing: 0.2px; z-index: 250;
+        }
+        #subtitles-box .cursor { display: inline-block; width: 2px; height: 1em; background: rgba(255,255,255,0.8); margin-left: 2px; animation: blink 0.7s steps(1) infinite; vertical-align: text-bottom; }
+        @keyframes blink { 0%,50%{opacity:1}51%,100%{opacity:0} }
+
+        /* POV Flash Effect */
+        #pov-flash { position: absolute; top:0; left:0; width:100%; height:100%; background: white; opacity:0; z-index:15; pointer-events:none; transition: opacity 0.1s; }
+
+        /* Footer Layer */
+        .footer-layer {
+            position: absolute; bottom: 10px; left: 20px; z-index: 10; pointer-events: auto;
+            font-size: 11px; color: var(--text-muted); font-weight: 600;
+        }
+
+        /* 3D Hotspots */
+        #annotations-layer { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 5; pointer-events: none; overflow: hidden; }
+        .hotspot-wrapper { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; display: flex; flex-direction: column; align-items: flex-start; z-index: 10; }
+        .hotspot-dot { width: 14px; height: 14px; background: rgba(150,150,150,0.9); border-radius: 50%; box-shadow: 0 0 0 4px rgba(150,150,150,0.2); cursor: pointer; transition: all 0.3s; border: none; padding: 0; margin: 0; appearance: none; }
+        .hotspot-wrapper:hover { z-index: 100; }
+        .hotspot-wrapper:hover .hotspot-dot, .hotspot-dot:focus-visible { transform: scale(1.3); background: var(--accent); box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.4);}
+        .hotspot-card {
+            background: var(--panel-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border); border-radius: 12px; box-shadow: var(--glass-shadow);
+            margin-top: 10px; width: 250px; opacity: 0; max-height: 0; overflow: hidden; color: var(--text-main);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); transform: translateY(-10px); pointer-events: none;
+        }
+        /* Open card on hover OR when parent wrapper has focus-within (accessible) */
+        .hotspot-wrapper:hover .hotspot-card, .hotspot-wrapper:focus-within .hotspot-card { opacity: 1; max-height: 200px; transform: translateY(0); padding: 12px; pointer-events: auto; }
+        .hotspot-title { font-size: 13px; font-weight: 800; margin-bottom: 4px; border-bottom: 1px solid var(--panel-border); padding-bottom: 4px;}
+        .hotspot-desc { font-size: 11px; line-height: 1.4; color: var(--text-muted); }
+        .annotation-line { position: absolute; background: rgba(120, 120, 120, 0.4); transform-origin: left center; pointer-events: none; z-index: 4; height: 1px; }
+
+        .theme-button { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 4px; border-radius: 50%; width: 30px; height: 30px; display:flex; align-items:center; justify-content:center; transition: 0.2s;}
+        .theme-button:hover { background: rgba(120,120,120,0.2); color: var(--text-main); }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+    <div id="annotations-layer" aria-live="polite"></div>
+
+    <!-- Cinematic Letterbox Bars -->
+    <div class="letterbox-bar top" id="letterbox-top"></div>
+    <div class="letterbox-bar bottom" id="letterbox-bottom"></div>
+
+    <div id="ui-layer">
+        <!-- Left Sidebar: Informational & Environmental -->
+        <div class="side-bar">
+            <div class="glass-panel">
+                <div class="header-bg">
+                    <div>
+                        <div class="credit">Created by Vihari Battula</div>
+                        <h1>Academic Eye Simulation</h1>
+                    </div>
+                    <button class="theme-button" id="btn-theme" aria-label="Toggle Light/Dark Mode">🌓</button>
+                </div>
+                <p>A premium interactive exploration of human ocular physiology, optics, and pathology.</p>
+            </div>
+
+            <div class="glass-panel control-block" id="panel-physio">
+                <button class="panel-header" aria-expanded="true" aria-controls="content-physio" onclick="togglePanel('panel-physio')">
+                    <h2>Physiological Controls</h2><span class="panel-toggle-icon">▼</span>
+                </button>
+                <div class="panel-content" id="content-physio">
+                    <div class="slider-row">
+                        <div class="slider-labels"><span>Pupil Rest</span><span style="color:var(--accent);">Dilated</span></div>
+                        <input type="range" id="pupil-dilation" min="0" max="1" step="0.01" value="0.5" aria-label="Pupil Dilation Slider">
+                    </div>
+                    <div class="slider-row" style="margin-top:8px;">
+                        <div class="slider-labels"><span>Lens Relaxed</span><span style="color:var(--accent);">Accommodated (Near Focus)</span></div>
+                        <input type="range" id="lens-accomm" min="0" max="1" step="0.01" value="0.0" aria-label="Lens Accommodation Slider">
+                    </div>
+                    <button class="info-toggle-btn" onclick="toggleInfo('info-physio')">ℹ What do these controls do?</button>
+                    <div class="info-desc" id="info-physio">
+                        <strong>Pupil Dilation:</strong> Controls iris aperture diameter. At rest (~3mm), the pupil admits moderate light. Fully dilated (~8mm, mydriasis) — as occurs in darkness or with clinical drops like tropicamide — maximizes light entry. Constriction (miosis) protects the retina from bright light and increases depth of focus.<br><br>
+                        <strong>Lens Accommodation:</strong> Simulates ciliary muscle action on the crystalline lens. When relaxed (slider at 0), zonular ligaments are taut, pulling the lens flat — focused at infinity. When accommodated (slider at 1), the ciliary muscle contracts, zonules slacken, and the elastic lens rounds — shifting focus to near objects. This ability weakens with age (presbyopia). Reset returns to the resting flat state for distance vision.
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-panel control-block" id="panel-optics">
+                <button class="panel-header" aria-expanded="true" aria-controls="content-optics" onclick="togglePanel('panel-optics')">
+                    <h2>Myopia Optics Simulation</h2><span class="panel-toggle-icon">▼</span>
+                </button>
+                <div class="panel-content" id="content-optics">
+                    <div class="slider-row">
+                        <div class="slider-labels"><span>Normal Axis</span><span style="color:var(--accent);">Elongated</span></div>
+                        <input type="range" id="axial-length" min="0" max="1" step="0.01" value="0.0" aria-label="Axial Elongation Slider">
+                    </div>
+                    <div class="toggle-row" style="margin-top:8px;">
+                        <span>Apply Concave Contact Lens</span>
+                        <label class="switch"><input type="checkbox" id="toggle-lens" aria-label="Toggle Concave Lens"><span class="slider"></span></label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-panel control-block" id="panel-pathology">
+                <button class="panel-header" aria-expanded="true" aria-controls="content-pathology" onclick="togglePanel('panel-pathology')">
+                    <h2>Medical Pathology Overlays</h2><span class="panel-toggle-icon">▼</span>
+                </button>
+                <div class="panel-content" id="content-pathology">
+                    <div class="toggle-row">
+                        <span style="color:var(--danger);">Simulate Glaucoma</span>
+                        <label class="switch"><input type="checkbox" id="toggle-glaucoma" class="danger" aria-label="Toggle Glaucoma"><span class="slider"></span></label>
+                    </div>
+                    <div class="anim-bar-track" id="glau-bar-track"><div class="anim-bar-fill danger" id="glau-bar-fill"></div></div>
+
+                    <div class="toggle-row" style="margin-top:8px;">
+                        <span style="color:var(--danger);">Retinal Detachment</span>
+                        <label class="switch"><input type="checkbox" id="toggle-detachment" class="danger" aria-label="Toggle Retinal Detachment"><span class="slider"></span></label>
+                    </div>
+                    <div class="anim-bar-track" id="det-bar-track"><div class="anim-bar-fill danger" id="det-bar-fill"></div></div>
+
+                    <button class="info-toggle-btn" onclick="toggleInfo('info-pathology')">ℹ What happens in these conditions?</button>
+                    <div class="info-desc danger-info" id="info-pathology">
+                        <strong>Glaucoma:</strong> Elevated intraocular pressure (IOP) from impaired aqueous humor drainage through the trabecular meshwork. The increased pressure damages retinal ganglion cell axons at the optic nerve head, causing progressive &ldquo;cupping&rdquo; of the optic disc. Vision loss begins peripherally and advances toward central vision if untreated. Animation phases: aqueous buildup → optic disc cupping → nerve fiber damage → peripheral field loss.<br><br>
+                        <strong>Retinal Detachment:</strong> The neural retina separates from the retinal pigment epithelium (RPE). Vitreous traction pulls on the retina creating a tear (most common in the superior-temporal quadrant). Fluid seeps through the tear, lifting the retina away. Patients experience floaters, photopsia (light flashes), and a descending shadow or &ldquo;curtain&rdquo; across their visual field. Animation phases: vitreous traction → tear formation → progressive peeling → curtain descent.
+                    </div>
+                </div>
+            </div>
+
+             <div class="glass-panel control-block" id="panel-diag">
+                <button class="panel-header" aria-expanded="true" aria-controls="content-diag" onclick="togglePanel('panel-diag')">
+                    <h2>Diagnostic Scanner Mode</h2><span class="panel-toggle-icon">▼</span>
+                </button>
+                <div class="panel-content" id="content-diag">
+                    <div class="toggle-row">
+                        <span style="color:var(--success);">Enable Ultrasonic Depth Scan</span>
+                        <label class="switch"><input type="checkbox" id="toggle-diagnostic" class="success" aria-label="Toggle Ultrasonic Scan"><span class="slider"></span></label>
+                    </div>
+                    <button class="info-toggle-btn" onclick="toggleInfo('info-diag')">ℹ What does the scanner reveal?</button>
+                    <div class="info-desc success-info" id="info-diag">
+                        <strong>Diagnostic Scanner</strong> simulates clinical imaging: B-Scan ultrasound and OCT (Optical Coherence Tomography). The false-color depth map reveals internal structural layers — corneal thickness, anterior chamber depth, lens position, and retinal layer integrity. Clinicians use these scans to detect macular edema, retinal thinning, glaucoma-related nerve fiber layer loss, and anterior chamber angle abnormalities. The cross-section clipping plane exposes the eye's internal architecture. The grid overlay simulates scan-line artifacts of real ultrasonic imaging equipment.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar: POV & Utils -->
+        <div class="side-bar" style="width: 320px;">
+            <div id="pov-container" class="glass-panel" style="padding:0; border:1px solid var(--panel-border);">
+                <div id="pov-header" aria-hidden="true">Retinal Feed (POV)</div>
+                <div id="pov-canvas-wrapper">
+                    <div id="pov-flash"></div>
+                    <div id="pov-detachment-mask"></div>
+                    <div id="pov-glaucoma-mask"></div>
+                </div>
+            </div>
+            
+            <div class="glass-panel control-block" style="gap:10px;">
+                <button class="btn btn-primary" onclick="window.zoomToMacula()" aria-label="Inspect Micro Photoreceptors">🔍 Inspect Photoreceptors</button>
+                <button class="btn" onclick="window.resetCamera()" aria-label="Reset Global View">Reset Global View</button>
+                <button class="btn btn-explore" onclick="window.open('explorer.html','_blank')" aria-label="Journey Inside the Eye">🔬 Journey Inside the Eye →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tour Overlay Bottom Right -->
+    <div id="tour-dock" class="glass-panel">
+        <button id="btn-tour" class="tour-button" aria-label="Start Cinematic Tour">🎬 Start Cinematic Narrative</button>
+    </div>
+    <div id="subtitles-box" aria-live="assertive"></div>
+
+    <div class="footer-layer">
+        © 2026 Vihari Battula. Licensed under MIT License CC 4.0
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ==========================================
+        // 0. UI UTILITIES
+        // ==========================================
+        window.togglePanel = function(id) {
+            const block = document.getElementById(id); const btn = block.querySelector('.panel-header');
+            const isCollapsed = block.classList.toggle('collapsed');
+            btn.setAttribute('aria-expanded', !isCollapsed);
+        }
+        
+        window.toggleInfo = function(id) {
+            document.getElementById(id).classList.toggle('open');
+        }
+        
+        let isLightMode = false;
+        document.getElementById('btn-theme').addEventListener('click', () => {
+            isLightMode = !isLightMode;
+            document.body.classList.toggle('light-mode', isLightMode);
+            scene.background = new THREE.Color(isLightMode ? '#cbd5e1' : '#020617');
+        });
+
+        // ==========================================
+        // 1. PROCEDURAL ASSETS
+        // ==========================================
+        function generateHDRIenv() {
+            const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 512; const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(0,0,1024,512);
+            ctx.fillStyle = '#ffffff'; ctx.filter = 'blur(10px)';
+            ctx.fillRect(100, 100, 300, 100); ctx.fillRect(600, 250, 100, 200); 
+            const envTex = new THREE.CanvasTexture(canvas); envTex.mapping = THREE.EquirectangularReflectionMapping; return envTex;
+        }
+
+        function drawVeins(ctx, x, y, angle, depth, length, width, color) {
+            if (depth === 0) return;
+            const x2 = x + Math.cos(angle)*length; const y2 = y + Math.sin(angle)*length;
+            ctx.lineWidth = width; ctx.strokeStyle = color; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x2,y2); ctx.stroke();
+            const branches = Math.floor(Math.random() * 2) + 1;
+            for (let i = 0; i < branches; i++) drawVeins(ctx, x2, y2, angle + (Math.random()-0.5)*1.2, depth-1, length*(0.6+Math.random()*0.2), width*0.7, color);
+        }
+
+        function createTexture(type) {
+            const size = 512; const c = document.createElement('canvas'); c.width=size; c.height=size; const ctx = c.getContext('2d');
+            if (type === 'choroid') {
+                ctx.fillStyle = '#2a0208'; ctx.fillRect(0,0,size,size);
+                for(let i=0; i<15; i++) drawVeins(ctx, Math.random()*size, Math.random()*size, Math.random()*Math.PI*2, 4, 60, 8, 'rgba(120, 15, 30, 0.5)');
+            } else if (type === 'retina') {
+                ctx.fillStyle = '#bf5464'; ctx.fillRect(0,0,size,size);
+                let g = ctx.createRadialGradient(size/2, size/2, 40, size/2, size/2, 250);
+                g.addColorStop(0, 'rgba(30,0,5,0.4)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = g; ctx.fillRect(0,0,size,size);
+                const ox = size/2-100, oy = size/2+40;
+                ctx.fillStyle = '#fce7b6'; ctx.beginPath(); ctx.arc(ox, oy, 40, 0, Math.PI*2); ctx.fill();
+                for(let i=0; i<8; i++) {
+                    const ang = Math.random()*Math.PI*2;
+                    drawVeins(ctx, ox, oy, ang, 3, 100, 5, 'rgba(200, 30, 30, 0.8)');
+                    drawVeins(ctx, ox, oy, ang+0.1, 3, 100, 8, 'rgba(100, 10, 20, 0.8)');
+                }
+            } else if (type === 'iris') {
+                c.width=512; c.height=512;
+                let gr = ctx.createRadialGradient(256,256, 40, 256,256, 250);
+                gr.addColorStop(0, '#000'); gr.addColorStop(0.2, '#0f766e'); gr.addColorStop(0.8, '#14b8a6'); gr.addColorStop(1, '#042f2e');
+                ctx.fillStyle = gr; ctx.fillRect(0,0,512,512);
+                for(let a=0; a<Math.PI*2; a+=0.05) {
+                    ctx.strokeStyle = `rgba(167, 243, 208, ${Math.random()*0.4})`; ctx.lineWidth = Math.random()*3+1;
+                    ctx.beginPath(); ctx.moveTo(256 + Math.cos(a)*50, 256 + Math.sin(a)*50);
+                    ctx.bezierCurveTo( 256+Math.cos(a)*100, 256+Math.sin(a)*100, 256+Math.cos(a-0.2)*150, 256+Math.sin(a-0.2)*150, 256+Math.cos(a)*250, 256+Math.sin(a)*250 );
+                    ctx.stroke();
+                }
+            } else if (type === 'sclera') {
+                ctx.fillStyle = '#f8fafc'; ctx.fillRect(0,0,size,size);
+                for(let i=0; i<10; i++) drawVeins(ctx, Math.random()*size, Math.random()*size, Math.random()*Math.PI*2, 2, 30, 2, 'rgba(239,68,68,0.1)');
+            }
+            return new THREE.CanvasTexture(c);
+        }
+
+        const tex = { choroid: createTexture('choroid'), retina: createTexture('retina'), iris: createTexture('iris'), sclera: createTexture('sclera') };
+
+        // ==========================================
+        // 2. SCENE SETUP
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene(); scene.background = new THREE.Color('#020617'); scene.environment = generateHDRIenv();
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 0.1, 500); camera.position.set(-18, 5, 20);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight); 
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        renderer.localClippingEnabled = true;
+        container.appendChild(renderer.domElement);
+        
+        const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.05;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+        const dir = new THREE.DirectionalLight(0xffffff, 1.2); dir.position.set(-10, 25, 10); scene.add(dir);
+        // Spotlight for dramatic tour lighting
+        const spotLight = new THREE.SpotLight(0x38bdf8, 0, 30, Math.PI/6, 0.5); spotLight.position.set(-5, 5, 10); scene.add(spotLight);
+
+        // Eye Chart Shader
+        function createEyeChartTex() {
+            const c = document.createElement('canvas'); c.width=512; c.height=512; const ctx = c.getContext('2d');
+            ctx.fillStyle='#fff'; ctx.fillRect(0,0,512,512); ctx.fillStyle='#000'; ctx.font='900 100px sans-serif'; ctx.textAlign='center'; 
+            ctx.fillText('E', 256, 120); ctx.font='800 70px sans-serif'; ctx.fillText('F  P', 256, 220); ctx.font='700 50px sans-serif'; 
+            ctx.fillText('T  O  Z', 256, 300); ctx.font='600 35px sans-serif'; ctx.fillText('L  P  E  D', 256, 360); ctx.strokeStyle='red'; 
+            ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(50,400); ctx.lineTo(462,400); ctx.stroke();
+            return new THREE.CanvasTexture(c);
+        }
+
+        const bUnifs = { 't': { value: createEyeChartTex() }, 'bAmt': { value: 0.0 } };
+        const tgtMatBlur = new THREE.ShaderMaterial({
+            uniforms: bUnifs,
+            vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            fragmentShader: `uniform sampler2D t; uniform float bAmt; varying vec2 vUv;
+                void main() {
+                    vec4 sum = vec4(0.0); float off = bAmt * 0.01;
+                    sum += texture2D(t, vec2(vUv.x - off, vUv.y - off)) * 0.0625; sum += texture2D(t, vec2(vUv.x, vUv.y - off)) * 0.125; sum += texture2D(t, vec2(vUv.x + off, vUv.y - off)) * 0.0625;
+                    sum += texture2D(t, vec2(vUv.x - off, vUv.y)) * 0.125; sum += texture2D(t, vec2(vUv.x, vUv.y)) * 0.25; sum += texture2D(t, vec2(vUv.x + off, vUv.y)) * 0.125;
+                    sum += texture2D(t, vec2(vUv.x - off, vUv.y + off)) * 0.0625; sum += texture2D(t, vec2(vUv.x, vUv.y + off)) * 0.125; sum += texture2D(t, vec2(vUv.x + off, vUv.y + off)) * 0.0625;
+                    gl_FragColor = sum;
+                }`
+        });
+        const targetMesh = new THREE.Mesh(new THREE.PlaneGeometry(35,35), tgtMatBlur);
+        targetMesh.position.set(0, 0, 80); scene.add(targetMesh);
+
+        // Diagnostic Scanner Shader
+        const diagMaterial = new THREE.ShaderMaterial({
+            vertexShader: `varying float vz; varying vec3 vpos; void main(){ vz = position.z; vpos = (modelMatrix * vec4(position,1.0)).xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+            fragmentShader: `varying float vz; varying vec3 vpos; void main(){ 
+                float normZ = smoothstep(-10.0, 10.0, vz);
+                vec3 col = mix(vec3(0.0,0.5,1.0), vec3(1.0,1.0,0.0), normZ); 
+                float grid = mod(vpos.x * 2.0, 1.0) < 0.1 || mod(vpos.y * 2.0, 1.0) < 0.1 ? 0.3 : 0.0;
+                gl_FragColor = vec4(col + grid, smoothstep(-0.5, 0.5, sin(vpos.x*20.0)*sin(vpos.y*20.0)*0.5+0.5) );
+            }`,
+            clippingPlanes: [new THREE.Plane(new THREE.Vector3(1, -0.3, 0).normalize(), 0)], side: THREE.DoubleSide
+        });
+
+        // POV
+        const povWR = document.getElementById('pov-canvas-wrapper');
+        const povRend = new THREE.WebGLRenderer({ antialias: false, powerPreference: "low-power" }); povRend.setPixelRatio(1); povRend.setSize(povWR.clientWidth, povWR.clientHeight);
+        povWR.appendChild(povRend.domElement); const povCam = new THREE.PerspectiveCamera(25, povWR.clientWidth/povWR.clientHeight, 0.1, 200);
+
+        // ==========================================
+        // 3. EYE 3D MODEL
+        // ==========================================
+        const EYE_RAD = 6.0; const CORN_Z = EYE_RAD - 1.5; const SEG = 36;
+        const cutPlane = new THREE.Plane(new THREE.Vector3(1, -0.3, 0).normalize(), 0); 
+        
+        const mainGrp = new THREE.Group(); scene.add(mainGrp);
+        const postGrp = new THREE.Group(); const antGrp = new THREE.Group();
+        mainGrp.add(postGrp); mainGrp.add(antGrp);
+
+        const mSclera = new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: tex.sclera, roughness: 0.3, clearcoat: 0.5, side: THREE.DoubleSide, clippingPlanes: [cutPlane] });
+        postGrp.add(new THREE.Mesh(new THREE.SphereGeometry(EYE_RAD+0.1, SEG, SEG), mSclera));
+        
+        const mChoroid = new THREE.MeshStandardMaterial({ color: 0x3b000b, map: tex.choroid, roughness: 0.8, side: THREE.DoubleSide, clippingPlanes: [cutPlane] });
+        postGrp.add(new THREE.Mesh(new THREE.SphereGeometry(EYE_RAD, SEG, SEG), mChoroid));
+
+        const retinaGeo = new THREE.SphereGeometry(EYE_RAD-0.05, SEG, SEG); const retinaPosArr = retinaGeo.attributes.position.array.slice(); 
+        const mRetina = new THREE.MeshPhysicalMaterial({ color: 0xdb2777, map: tex.retina, roughness: 0.6, clearcoat: 0.3, side: THREE.BackSide, clippingPlanes: [cutPlane] });
+        const retinaMesh = new THREE.Mesh(retinaGeo, mRetina); postGrp.add(retinaMesh);
+
+        // Optic Nerve Bundle
+        const nerveBundleGrp = new THREE.Group(); 
+        const mNerve = new THREE.MeshStandardMaterial({ color: 0xfce7b6, roughness: 0.8, clippingPlanes: [cutPlane], transparent: true, opacity: 1.0 });
+        const nerveFibers = [];
+        for(let i=0; i<18; i++) {
+            const rx = (Math.random()-0.5)*1.2, ry = (Math.random()-0.5)*1.2;
+            const rGeo = new THREE.CylinderGeometry(0.06, 0.06, 4, 6); rGeo.translate(rx, -2, ry); 
+            const fMesh = new THREE.Mesh(rGeo, mNerve.clone());
+            nerveBundleGrp.add(fMesh); nerveFibers.push(fMesh);
+        }
+        const opticDisc = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 1.6), mNerve); opticDisc.position.set(0, 0, 0); nerveBundleGrp.add(opticDisc);
+        nerveBundleGrp.rotation.x = Math.PI/2; nerveBundleGrp.position.set(1.2, -0.6, -EYE_RAD); postGrp.add(nerveBundleGrp);
+
+        // Cornea
+        const cornea = new THREE.Mesh(new THREE.SphereGeometry(4.0, SEG, SEG, 0, Math.PI*2, 0, Math.PI/3), new THREE.MeshPhysicalMaterial({
+            color: 0xffffff, transparent: true, opacity: 0.15, transmission: 0.99, roughness: 0.05, ior: 1.376, thickness: 0.6, side: THREE.DoubleSide, clearcoat: 1.0, clippingPlanes: [cutPlane]
+        }));
+        cornea.rotation.x = Math.PI/2; cornea.position.z = CORN_Z; antGrp.add(cornea);
+
+        // Crystalline Lens
+        const lensM = new THREE.Mesh(new THREE.SphereGeometry(2.4, SEG, SEG), new THREE.MeshPhysicalMaterial({
+            color: 0xf8fafc, transparent: true, opacity: 0.6, transmission: 0.95, roughness: 0.0, ior: 1.406, clearcoat: 1.0, side: THREE.DoubleSide, clippingPlanes: [cutPlane]
+        }));
+        lensM.position.z = CORN_Z - 0.5; antGrp.add(lensM);
+
+        // Iris
+        let irisGeo = new THREE.RingGeometry(1.2, 3.4, SEG);
+        const irisMesh = new THREE.Mesh(irisGeo, new THREE.MeshStandardMaterial({map: tex.iris, roughness: 0.5, side: THREE.DoubleSide, clippingPlanes: [cutPlane]}));
+        irisMesh.position.z = CORN_Z + 0.1; antGrp.add(irisMesh);
+
+        // Ciliary Body
+        const ciliary = new THREE.Mesh(new THREE.TorusGeometry(3.6, 0.4, 16, SEG), new THREE.MeshStandardMaterial({color: 0x7f1d1d, clippingPlanes: [cutPlane], side: THREE.DoubleSide}));
+        ciliary.position.z = CORN_Z - 0.5; antGrp.add(ciliary);
+
+        // Photoreceptors (Micro)
+        const microGrp = new THREE.Group(); microGrp.position.set(0, 0, -EYE_RAD); microGrp.rotation.y = Math.PI;
+        const rI = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.015, 0.015, 0.18, 4).translate(0,0.09,0), new THREE.MeshStandardMaterial({color: 0x38bdf8, clippingPlanes:[cutPlane]}), 800);
+        const cI = new THREE.InstancedMesh(new THREE.ConeGeometry(0.02, 0.15, 4).translate(0,0.075,0), new THREE.MeshStandardMaterial({color: 0xfbbf24, clippingPlanes:[cutPlane]}), 300);
+        const matM = new THREE.Matrix4(), vecV = new THREE.Vector3(); let rc=0, cc=0;
+        for(let i=0; i<1200; i++) {
+            vecV.set(Math.cos(i)*Math.sqrt(Math.random())*0.7, Math.sin(i)*Math.sqrt(Math.random())*0.7, 0); matM.makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), new THREE.Vector3(vecV.x,vecV.y,4).normalize())); matM.setPosition(vecV);
+            if(Math.random()>0.25 && rc<800) rI.setMatrixAt(rc++, matM); else if(cc<300) cI.setMatrixAt(cc++, matM);
+        }
+        microGrp.add(rI); microGrp.add(cI); postGrp.add(microGrp);
+
+        // Corrective Lens
+        const corrLens = new THREE.Mesh(new THREE.CylinderGeometry(4,4,0.4,SEG), new THREE.MeshPhysicalMaterial({color: 0x93c5fd, transparent: true, opacity: 0.3, transmission: 0.9, ior: 1.5, clippingPlanes: [cutPlane]}));
+        corrLens.rotation.x = Math.PI/2; corrLens.position.z = CORN_Z + 5.0; corrLens.visible = false; antGrp.add(corrLens);
+
+        // Light Rays
+        const rays = new THREE.Group(); mainGrp.add(rays); const rl = []; const rMat = new THREE.LineBasicMaterial({color: 0xef4444, transparent:true, opacity:0.8, linewidth:3});
+        for(let i=0; i<5; i++) { const l = new THREE.Line(new THREE.BufferGeometry(), rMat); rays.add(l); rl.push(l); }
+        const fPoint = new THREE.Mesh(new THREE.SphereGeometry(0.2,16,16), new THREE.MeshBasicMaterial({color:0xef4444})); rays.add(fPoint);
+
+        // ==========================================
+        // 4. PATHOLOGY ANIMATION MESHES
+        // ==========================================
+        
+        // --- GLAUCOMA: Aqueous humor buildup mesh ---
+        const aqueousMat = new THREE.MeshPhysicalMaterial({
+            color: 0x06b6d4, transparent: true, opacity: 0, roughness: 0.1, 
+            transmission: 0.7, ior: 1.336, side: THREE.DoubleSide, clippingPlanes: [cutPlane]
+        });
+        const aqueousMesh = new THREE.Mesh(new THREE.SphereGeometry(3.2, 24, 24), aqueousMat);
+        aqueousMesh.position.z = CORN_Z - 0.2; aqueousMesh.scale.set(1, 0.6, 0.5);
+        aqueousMesh.visible = false; antGrp.add(aqueousMesh);
+
+        // Glaucoma pressure glow at optic disc
+        const glauGlowMat = new THREE.MeshBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0 });
+        const glauGlow = new THREE.Mesh(new THREE.SphereGeometry(1.0, 16, 16), glauGlowMat);
+        glauGlow.position.set(1.2, -0.6, -EYE_RAD); glauGlow.visible = false; postGrp.add(glauGlow);
+
+        // --- RETINAL DETACHMENT: Vitreous traction fibers ---
+        const tractionGrp = new THREE.Group(); postGrp.add(tractionGrp);
+        const tractionMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, linewidth: 1 });
+        const tractionLines = [];
+        for (let i = 0; i < 6; i++) {
+            const ang = (i / 6) * Math.PI * 0.6 + Math.PI * 0.15;
+            const r = EYE_RAD - 0.1;
+            const endPt = new THREE.Vector3(Math.cos(ang) * r * 0.3, r * 0.85, Math.sin(ang) * r * 0.3 - EYE_RAD * 0.3);
+            const startPt = new THREE.Vector3(endPt.x * 0.3, endPt.y * 0.4, endPt.z * 0.5);
+            const geo = new THREE.BufferGeometry().setFromPoints([startPt, endPt]);
+            const line = new THREE.Line(geo, tractionMat.clone());
+            tractionGrp.add(line); tractionLines.push(line);
+        }
+
+        // Retinal tear marker
+        const tearMarkerMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0 });
+        const tearMarker = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12), tearMarkerMat);
+        tearMarker.position.set(2.0, 4.2, -3.0); tearMarker.visible = false; postGrp.add(tearMarker);
+
+        // Sub-retinal fluid mesh
+        const subRetFluidMat = new THREE.MeshPhysicalMaterial({
+            color: 0xfde68a, transparent: true, opacity: 0, roughness: 0.3, 
+            side: THREE.DoubleSide, clippingPlanes: [cutPlane]
+        });
+        const subRetFluid = new THREE.Mesh(
+            new THREE.SphereGeometry(EYE_RAD - 0.2, 24, 24, 0, Math.PI * 2, 0, Math.PI / 3),
+            subRetFluidMat
+        );
+        subRetFluid.rotation.x = -Math.PI / 6; subRetFluid.visible = false; postGrp.add(subRetFluid);
+
+        // ==========================================
+        // 5. ANIMATED PATHOLOGY ENGINE
+        // ==========================================
+        const glauAnim = { progress: 0, target: 0 };
+        const detAnim = { progress: 0, target: 0 };
+        const ANIM_SPEED = 0.008; // Smooth transition speed
+
+        function updateGlaucomaAnimation() {
+            const prev = glauAnim.progress;
+            glauAnim.progress += (glauAnim.target - glauAnim.progress) * ANIM_SPEED * 2;
+            if (Math.abs(glauAnim.target - glauAnim.progress) < 0.001) glauAnim.progress = glauAnim.target;
+            if (glauAnim.progress === prev && glauAnim.progress === glauAnim.target) return;
+
+            const p = glauAnim.progress;
+            // Phase thresholds
+            const p1 = Math.min(1, p / 0.3);          // 0→0.3: aqueous buildup
+            const p2 = Math.max(0, Math.min(1, (p - 0.25) / 0.3)); // 0.25→0.55: cupping
+            const p3 = Math.max(0, Math.min(1, (p - 0.5) / 0.25)); // 0.5→0.75: nerve damage
+            const p4 = Math.max(0, Math.min(1, (p - 0.7) / 0.3));  // 0.7→1.0: vision loss
+
+            // Phase 1: Aqueous humor buildup
+            aqueousMesh.visible = p > 0.01;
+            aqueousMat.opacity = p1 * 0.25;
+            aqueousMesh.scale.set(1 + p1 * 0.15, 0.6 + p1 * 0.1, 0.5 + p1 * 0.1);
+
+            // Phase 2: Optic disc cupping (depression)
+            opticDisc.position.z = -p2 * 0.8;
+            glauGlow.visible = p2 > 0.01;
+            glauGlowMat.opacity = p2 * 0.35;
+
+            // Phase 3: Nerve fiber thinning
+            for (let i = 0; i < nerveFibers.length; i++) {
+                const fiberFade = Math.max(0.15, 1 - p3 * (0.4 + (i / nerveFibers.length) * 0.5));
+                nerveFibers[i].material.opacity = fiberFade;
+            }
+
+            // Phase 4: Peripheral vision loss (POV)
+            document.getElementById('pov-glaucoma-mask').style.opacity = String(p4);
+
+            // Progress bar
+            document.getElementById('glau-bar-fill').style.width = (p * 100) + '%';
+        }
+
+        function updateDetachmentAnimation() {
+            const prev = detAnim.progress;
+            detAnim.progress += (detAnim.target - detAnim.progress) * ANIM_SPEED * 1.5;
+            if (Math.abs(detAnim.target - detAnim.progress) < 0.001) detAnim.progress = detAnim.target;
+            if (detAnim.progress === prev && detAnim.progress === detAnim.target) return;
+
+            const p = detAnim.progress;
+            const p1 = Math.min(1, p / 0.2);          // 0→0.2: traction
+            const p2 = Math.max(0, Math.min(1, (p - 0.15) / 0.2)); // 0.15→0.35: tear
+            const p3 = Math.max(0, Math.min(1, (p - 0.3) / 0.4));  // 0.3→0.7: peeling
+            const p4 = Math.max(0, Math.min(1, (p - 0.65) / 0.35)); // 0.65→1.0: curtain
+
+            // Phase 1: Vitreous traction fibers appear and stretch
+            tractionLines.forEach((line, i) => {
+                line.material.opacity = p1 * 0.7;
+                const scale = 1 + p1 * 0.3;
+                line.scale.set(scale, scale, scale);
+            });
+
+            // Phase 2: Tear formation — flash and marker
+            tearMarker.visible = p2 > 0.01;
+            tearMarkerMat.opacity = p2 * 0.9;
+            tearMarker.scale.setScalar(0.5 + p2 * 1.0);
+            // POV flash on initial tear
+            if (p2 > 0.01 && p2 < 0.15) {
+                document.getElementById('pov-flash').style.opacity = String(Math.max(0, 0.6 - p2 * 5));
+            } else {
+                document.getElementById('pov-flash').style.opacity = '0';
+            }
+
+            // Phase 3: Progressive retinal peeling
+            const pos = retinaMesh.geometry.attributes.position;
+            const detachAmount = p3 * 1.8;
+            for (let i = 0; i < pos.count; i++) {
+                let ox = retinaPosArr[i*3], oy = retinaPosArr[i*3+1], oz = retinaPosArr[i*3+2];
+                if (oy > 0) {
+                    // Peel from top, spreading downward based on progress
+                    const yNorm = oy / EYE_RAD;
+                    const peelThreshold = 0.3 + p3 * 0.7; // Peeling spreads from top
+                    if (yNorm > (1 - peelThreshold)) {
+                        const peelStrength = (yNorm - (1 - peelThreshold)) / peelThreshold;
+                        const sag = peelStrength * detachAmount;
+                        oy -= sag * 0.4;
+                        oz += sag * 0.3; // Billows inward
+                        ox += sag * 0.15 * Math.sin(i * 0.3); // Slight waviness
+                    }
+                }
+                pos.setXYZ(i, ox, oy, oz);
+            }
+            pos.needsUpdate = true; retinaMesh.geometry.computeVertexNormals();
+
+            // Sub-retinal fluid
+            subRetFluid.visible = p3 > 0.1;
+            subRetFluidMat.opacity = p3 * 0.3;
+
+            // Phase 4: POV curtain descent
+            const dm = document.getElementById('pov-detachment-mask');
+            dm.style.opacity = String(p4);
+            dm.style.transform = `translateY(${-20 + p4 * 20}px)`;
+
+            // Progress bar
+            document.getElementById('det-bar-fill').style.width = (p * 100) + '%';
+        }
+
+        // ==========================================
+        // 6. PHYSIOLOGY & STATE ENGINE
+        // ==========================================
+        const S = { myop: 0.0, lens: false, glau: false, det: false, diag: false, pupil: 0.5, accomm: 0.0 };
+
+        function applyState() {
+            postGrp.scale.set(1, 1, 1 + (S.myop * 0.35)); corrLens.visible = S.lens;
+            const szZ = -EYE_RAD * (1 + S.myop * 0.35); const acZ = S.lens ? szZ : -EYE_RAD - (S.accomm*1.5); 
+            fPoint.position.set(0, 0, acZ);
+
+            for(let i=0; i<5; i++) {
+                const y = ((i/4)*2-1) * 2.2; const p = []; p.push(new THREE.Vector3(0, y, 40)); let cy = y;
+                if(S.lens && S.myop > 0) { p.push(new THREE.Vector3(0, cy, corrLens.position.z)); cy *= (1 + S.myop * 0.15); }
+                p.push(new THREE.Vector3(0, cy, CORN_Z+1)); p.push(new THREE.Vector3(0, cy*0.8, lensM.position.z)); p.push(new THREE.Vector3(0, 0, acZ));
+                if(!S.lens && S.myop > 0 && acZ > szZ) p.push(new THREE.Vector3(0, -(cy*0.8)*(szZ-acZ)/Math.abs(acZ-lensM.position.z) , szZ));
+                rl[i].geometry.setFromPoints(p);
+            }
+            povCam.position.set(0, 0, szZ + 0.5); povCam.lookAt(0,0,100);
+            
+            let vBlur = Math.max(0, (szZ - acZ) * -2);
+            bUnifs.bAmt.value = vBlur; document.getElementById('pov-canvas-wrapper').style.filter = `blur(${vBlur}px)`;
+
+            lensM.scale.set(1, 1, 0.45 + (S.accomm * 0.4));
+            irisMesh.geometry.dispose(); irisMesh.geometry = new THREE.RingGeometry(2.2 - (S.pupil * 1.7), 3.4, SEG);
+
+            if(S.diag) { scene.overrideMaterial = diagMaterial; rays.visible = false; } else { scene.overrideMaterial = null; rays.visible = true; }
+        }
+
+        // Set animation targets instead of instant state for pathology
+        ['axial-length','toggle-lens','toggle-glaucoma','toggle-detachment','toggle-diagnostic', 'pupil-dilation', 'lens-accomm'].forEach(id => {
+            const el = document.getElementById(id);
+            el.addEventListener(el.type==='checkbox'?'change':'input', (e) => {
+                if(id==='axial-length') S.myop = parseFloat(e.target.value); 
+                if(id==='toggle-lens') S.lens = e.target.checked;
+                if(id==='toggle-glaucoma') { S.glau = e.target.checked; glauAnim.target = S.glau ? 1 : 0; }
+                if(id==='toggle-detachment') { S.det = e.target.checked; detAnim.target = S.det ? 1 : 0; }
+                if(id==='toggle-diagnostic') S.diag = e.target.checked; 
+                if(id==='pupil-dilation') S.pupil = parseFloat(e.target.value);
+                if(id==='lens-accomm') S.accomm = parseFloat(e.target.value);
+                applyState();
+            });
+        });
+
+        // ==========================================
+        // 7. ENHANCED CINEMATIC TOUR ENGINE
+        // ==========================================
+        const EYE_R = EYE_RAD; // alias for readability
+        const CZ = CORN_Z;
+
+        const TOUR_STOPS = [
+            { 
+                camStart: [-25, 8, 28], camEnd: [-18, 5, 20], 
+                tgtStart: [0, 0, 5], tgtEnd: [0, 0, 0],
+                dur: 7, clip: 0,
+                txt: 'The human eye — a biological camera perfected over 500 million years of evolution. Each one contains over 2 million working parts.'
+            },
+            { 
+                camStart: [-18, 5, 20], camEnd: [-12, 2, -12],
+                tgtStart: [0, 0, 0], tgtEnd: [0, 0, -2],
+                dur: 7, clip: 0,
+                txt: 'Encased in the tough white sclera, this 24mm sphere houses the most complex sensory system in the human body — capable of distinguishing 10 million colors.'
+            },
+            { 
+                camStart: [-12, 2, -12], camEnd: [-3, 0.5, CZ+3],
+                tgtStart: [0, 0, -2], tgtEnd: [0, 0, CZ],
+                dur: 7, clip: 0,
+                txt: 'Light first meets the cornea — a transparent dome responsible for roughly 70 percent of the eye\'s total refractive focusing power. It bends light before it even reaches the lens.'
+            },
+            {
+                camStart: [-3, 0.5, CZ+3], camEnd: [-2, 0.2, CZ-1],
+                tgtStart: [0, 0, CZ], tgtEnd: [0, 0, CZ-3],
+                dur: 7, clip: 2,
+                txt: 'Behind the cornea lies the anterior chamber, filled with aqueous humor — a clear fluid that nourishes the avascular cornea and lens, while maintaining precise intraocular pressure.'
+            },
+            {
+                camStart: [-2, 0.2, CZ-1], camEnd: [-1.5, -0.5, CZ+0.5],
+                tgtStart: [0, 0, CZ-3], tgtEnd: [0, 0, CZ],
+                dur: 7, clip: 2,
+                txt: 'The iris — a living aperture and the eye\'s most distinctive feature. Its delicate muscles constrict and dilate the pupil, regulating exactly how much light reaches the retina.'
+            },
+            {
+                camStart: [-1.5, -0.5, CZ+0.5], camEnd: [-1.5, 0, CZ-2.5],
+                tgtStart: [0, 0, CZ], tgtEnd: [0, 0, CZ-4],
+                dur: 7, clip: 3,
+                txt: 'The crystalline lens fine-tunes focus through accommodation. Ciliary muscles reshape it — pulling it flat for distant vision, allowing it to round for reading. An elegant autofocus system.'
+            },
+            {
+                camStart: [-1.5, 0, CZ-2.5], camEnd: [-2, 0.5, -1],
+                tgtStart: [0, 0, CZ-4], tgtEnd: [0, 0, -EYE_R],
+                dur: 7, clip: 4,
+                txt: 'The vitreous chamber fills most of the globe with a transparent gel. This structural scaffold maintains the eye\'s spherical shape and presses the retina gently against the wall.'
+            },
+            {
+                camStart: [-2, 0.5, -1], camEnd: [-1.5, 0.3, -EYE_R+2.5],
+                tgtStart: [0, 0, -EYE_R], tgtEnd: [0, 0, -EYE_R],
+                dur: 7, clip: 3,
+                txt: 'The retina — a tissue-thin neural layer lining the back wall. It contains over 130 million photoreceptors, capturing photons and converting them into electrical signals the brain can interpret.'
+            },
+            {
+                camStart: [-1.5, 0.3, -EYE_R+2.5], camEnd: [-0.5, -0.1, -EYE_R+1.2],
+                tgtStart: [0, 0, -EYE_R], tgtEnd: [0, 0, -EYE_R],
+                dur: 7, clip: 3,
+                txt: 'At the fovea centralis, cone photoreceptors are packed at extraordinary density — over 200,000 per square millimeter. This is where your sharpest, most detailed vision lives.'
+            },
+            {
+                camStart: [-0.5, -0.1, -EYE_R+1.2], camEnd: [-1, -0.8, -EYE_R+2],
+                tgtStart: [0, 0, -EYE_R], tgtEnd: [1.2, -0.6, -EYE_R],
+                dur: 7, clip: 3,
+                txt: 'The optic disc — a critical junction where 1.2 million retinal ganglion cell axons converge and exit as the optic nerve. This is the blind spot, and the site most vulnerable to glaucomatous damage.'
+            },
+            {
+                camStart: [-1, -0.8, -EYE_R+2], camEnd: [-14, 6, 18],
+                tgtStart: [1.2, -0.6, -EYE_R], tgtEnd: [0, 0, 0],
+                dur: 7, clip: 0,
+                txt: 'When this system fails — through axial elongation in myopia, elevated pressure in glaucoma, or tears causing retinal detachment — vision is progressively compromised.'
+            },
+            {
+                camStart: [-14, 6, 18], camEnd: [-18, 5, 20],
+                tgtStart: [0, 0, 0], tgtEnd: [0, 0, 0],
+                dur: 8, clip: 0,
+                txt: 'Understanding the eye is the first step to protecting it. Use the controls to explore pathology simulations, or take the Journey Inside the Eye for a deeper anatomical exploration.'
+            }
+        ];
+
+        let tourState = { running: false, stopIdx: 0, elapsed: 0, typewriterIdx: 0, typewriterTimer: null };
+        const subBox = document.getElementById('subtitles-box');
+        const lbTop = document.getElementById('letterbox-top');
+        const lbBot = document.getElementById('letterbox-bottom');
+
+        function easeInOutCubic(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
+
+        function typewriter(text, el) {
+            if (tourState.typewriterTimer) clearInterval(tourState.typewriterTimer);
+            tourState.typewriterIdx = 0;
+            el.innerHTML = '<span class="cursor"></span>';
+            el.style.opacity = '1';
+            tourState.typewriterTimer = setInterval(() => {
+                if (tourState.typewriterIdx < text.length) {
+                    el.innerHTML = text.substring(0, tourState.typewriterIdx + 1) + '<span class="cursor"></span>';
+                    tourState.typewriterIdx++;
+                } else {
+                    clearInterval(tourState.typewriterTimer);
+                    tourState.typewriterTimer = null;
+                    el.innerHTML = text; // Remove cursor when done
+                }
+            }, 32);
+        }
+
+        function setLetterbox(active) {
+            lbTop.classList.toggle('active', active);
+            lbBot.classList.toggle('active', active);
+        }
+
+        function startTour() {
+            tourState.running = true; tourState.stopIdx = 0; tourState.elapsed = 0;
+            document.getElementById('btn-tour').classList.add('active');
+            document.getElementById('btn-tour').innerText = '⏹ Stop Tour';
+            setLetterbox(true);
+            controls.enabled = false;
+            // Set initial camera position
+            const s = TOUR_STOPS[0];
+            camera.position.set(...s.camStart);
+            controls.target.set(...s.tgtStart);
+            typewriter(s.txt, subBox);
+        }
+
+        function stopTour() {
+            tourState.running = false;
+            document.getElementById('btn-tour').classList.remove('active');
+            document.getElementById('btn-tour').innerText = '🎬 Start Cinematic Narrative';
+            subBox.style.opacity = '0';
+            setLetterbox(false);
+            controls.enabled = true;
+            if (tourState.typewriterTimer) { clearInterval(tourState.typewriterTimer); tourState.typewriterTimer = null; }
+            spotLight.intensity = 0;
+            cutPlane.constant = 0;
+        }
+
+        document.getElementById('btn-tour').addEventListener('click', () => { if(tourState.running) stopTour(); else startTour(); });
+
+        function updateTour(delta) {
+            if (!tourState.running) return;
+            tourState.elapsed += delta;
+            const stop = TOUR_STOPS[tourState.stopIdx];
+            const t = Math.min(1, tourState.elapsed / stop.dur);
+            const eased = easeInOutCubic(t);
+
+            // Interpolate camera
+            const cs = new THREE.Vector3(...stop.camStart);
+            const ce = new THREE.Vector3(...stop.camEnd);
+            const ts = new THREE.Vector3(...stop.tgtStart);
+            const te = new THREE.Vector3(...stop.tgtEnd);
+            camera.position.lerpVectors(cs, ce, eased);
+            controls.target.lerpVectors(ts, te, eased);
+
+            // Animate clipping plane for interior views
+            const currentClip = cutPlane.constant;
+            const targetClip = stop.clip;
+            cutPlane.constant += (targetClip - currentClip) * 0.03;
+
+            // Spotlight follows camera target for dramatic interior lighting
+            if (stop.clip > 0) {
+                spotLight.intensity = 2.0;
+                spotLight.position.copy(camera.position);
+                spotLight.target.position.lerpVectors(ts, te, eased);
+            } else {
+                spotLight.intensity *= 0.95; // Fade out
+            }
+
+            // Advance to next stop
+            if (t >= 1) {
+                tourState.elapsed = 0;
+                tourState.stopIdx++;
+                if (tourState.stopIdx >= TOUR_STOPS.length) {
+                    stopTour(); return;
+                }
+                const next = TOUR_STOPS[tourState.stopIdx];
+                typewriter(next.txt, subBox);
+            }
+        }
+
+        window.resetCamera = () => { if(tourState.running) stopTour(); controls.reset(); camera.position.set(-18, 5, 20); controls.target.set(0,0,0); cutPlane.constant = 0; spotLight.intensity = 0; };
+        window.zoomToMacula = () => { if(tourState.running) stopTour(); const fZ = -EYE_RAD * (1+S.myop*0.35); camera.position.set(-0.8, -0.4, fZ + 1.0); controls.target.set(0,0,fZ); controls.update(); };
+
+        // ==========================================
+        // 8. HOTSPOTS & ANNOTATIONS
+        // ==========================================
+        const anns = [
+            { id:'c', t:'Cornea', d:'Primary refractive lens surface.', g:antGrp, v:[-2.8, 2.5, CORN_Z+0.5] },
+            { id:'i', t:'Iris (Morphable)', d:'Constricts/dilates adjusting to the light environment.', g:antGrp, v:[-1.8, -1.5, CORN_Z-0.1] },
+            { id:'l', t:'Crystalline Lens', d:'Accommodates thickness via ciliary flexion for near focus.', g:antGrp, v:[-1.0, 1.0, CORN_Z-0.5] },
+            { id:'z', t:'Ciliary Body', d:'Smooth muscle ring acting upon zonular ligaments.', g:antGrp, v:[-2.5, -2.5, CORN_Z-0.5] },
+            { id:'s', t:'Sclera', d:'Tough opaque protective structure.', g:postGrp, v:[-4.5, 4.0, -1] },
+            { id:'v', t:'Choroid', d:'Procedural fractal vasculature supplying oxygen.', g:postGrp, v:[-3.5, 3.5, -3.5] },
+            { id:'r', t:'Neural Retina', d:'Dynamic layer vulnerable to physical tear detachment.', g:postGrp, v:[-2.0, -2.0, -5.0] },
+            { id:'n', t:'Optic Nerve', d:'Bundled neurological pathway susceptible to Glaucoma pressure cupping.', g:postGrp, v:[1.5, -0.5, -EYE_RAD-1.0] }
+        ];
+        const aLayer = document.getElementById('annotations-layer'); const aDoms = [];
+        anns.forEach(a => {
+            const w=document.createElement('div'); w.className='hotspot-wrapper'; w.setAttribute('tabindex', '-1');
+            const d=document.createElement('button'); d.className='hotspot-dot'; d.setAttribute('aria-label', a.t + ' information');
+            const c=document.createElement('div'); c.className='hotspot-card'; c.innerHTML=`<div class="hotspot-title">${a.t}</div><div class="hotspot-desc">${a.d}</div>`;
+            w.appendChild(d); w.appendChild(c); aLayer.appendChild(w); const l=document.createElement('div'); l.className='annotation-line'; aLayer.appendChild(l);
+            aDoms.push({...a, w, l});
+        });
+
+        function syncUI() {
+            aDoms.forEach(a => {
+                const p = new THREE.Vector3(...a.v).applyMatrix4(a.g.matrixWorld);
+                if (p.project(camera).z > 1 || p.z < -1) { a.w.style.display='none'; a.l.style.display='none'; return; } 
+                a.w.style.display='flex'; a.l.style.display='block';
+                const x=(p.x*0.5+0.5)*window.innerWidth, y=(p.y*-0.5+0.5)*window.innerHeight;
+                a.w.style.left=`${x+30}px`; a.w.style.top=`${y-30}px`;
+                const dx=(x+30)-x, dy=(y-30)-y; a.l.style.width=`${Math.sqrt(dx*dx+dy*dy)}px`; a.l.style.left=`${x}px`; a.l.style.top=`${y}px`;
+                a.l.style.transform=`rotate(${Math.atan2(dy,dx)*180/Math.PI}deg)`;
+            });
+        }
+
+        window.addEventListener('resize', () => { camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); povCam.aspect=povWR.clientWidth/povWR.clientHeight; povCam.updateProjectionMatrix(); povRend.setSize(povWR.clientWidth,povWR.clientHeight); });
+
+        applyState();
+
+        // ==========================================
+        // 9. RENDER LOOP
+        // ==========================================
+        const clock = new THREE.Clock();
+        let frameCount = 0;
+
+        function render() {
+            requestAnimationFrame(render);
+            const delta = clock.getDelta();
+            frameCount++;
+
+            // Animated pathology updates
+            updateGlaucomaAnimation();
+            updateDetachmentAnimation();
+
+            // Tour update
+            if (tourState.running) updateTour(delta);
+
+            controls.update(); 
+            renderer.render(scene, camera); 
+            syncUI();
+            
+            // POV render — throttle to every 3rd frame for performance
+            if (frameCount % 3 === 0) {
+                const wasDiag = S.diag; if(wasDiag) scene.overrideMaterial = null; 
+                rays.visible = false; aLayer.style.display='none';
+                povRend.render(scene, povCam);
+                if(wasDiag) scene.overrideMaterial = diagMaterial; rays.visible = true; aLayer.style.display='block';
+            }
+        }
+        render();
+
+    </script>
+</body>
+</html>
