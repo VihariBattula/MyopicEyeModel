@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Premium Cinematic Eye Simulation</title>
+    <title>Academic Cinematic Eye Simulation</title>
+    <link rel="icon" type="image/png" href="favicon.png">
     <style>
         :root {
             --bg: #0f172a;
@@ -222,7 +223,7 @@
                     </div>
                     <button class="theme-button" id="btn-theme" aria-label="Toggle Light/Dark Mode">🌓</button>
                 </div>
-                <p>A premium interactive exploration of human ocular physiology, optics, and pathology.</p>
+                <p>An comprehensive interactive exploration of human ocular physiology, optics, and pathology.</p>
             </div>
 
             <div class="glass-panel control-block" id="panel-physio">
@@ -350,7 +351,9 @@
             document.getElementById(id).classList.toggle('open');
         }
         
-        let isLightMode = false;
+        let isLightMode = true; // Default to Light Mode for presentation
+        document.body.classList.add('light-mode');
+        
         document.getElementById('btn-theme').addEventListener('click', () => {
             isLightMode = !isLightMode;
             document.body.classList.toggle('light-mode', isLightMode);
